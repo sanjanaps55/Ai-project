@@ -1,53 +1,52 @@
-import Link from "next/link";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function AuthPage() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    // Accept any credentials - bypass authentication for now
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    router.push("/chat");
+  };
+
   return (
     <div className="page-container">
       <div className="mx-auto w-full max-w-md glass-panel p-8">
         <div className="mb-6 flex flex-col items-center text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+          <h1 className="text-2xl font-semibold tracking-tight text-[#2D2D2D] dark:text-[#EDE8E0]">
             Welcome back
           </h1>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-            Sign in or create an account to continue your journey with MindCare
-            AI.
+          <p className="mt-2 text-sm text-[#9A9A9A] dark:text-[#C5C0BA]">
+            Sign in to continue your journey with Nova.
           </p>
         </div>
 
-        <div className="mb-6 grid grid-cols-2 gap-2 rounded-full bg-slate-100 p-1 text-xs font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-          <button className="rounded-full bg-white px-3 py-1.5 text-slate-900 shadow-sm transition dark:bg-slate-900 dark:text-slate-50">
-            Login
-          </button>
-          <button className="rounded-full px-3 py-1.5 text-slate-500 transition hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-50">
-            Sign Up
-          </button>
-        </div>
-
-        <form
-          className="space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-          }}
-        >
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1.5">
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+              className="block text-sm font-medium text-[#2D2D2D] dark:text-[#EDE8E0]"
             >
-              Email
+              Email or Username
             </label>
             <input
               id="email"
-              type="email"
+              type="text"
               required
-              className="w-full rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-indigo-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-50 dark:hover:border-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500/40"
-              placeholder="you@example.com"
+              className="w-full rounded-xl border border-[#C5C0BA] bg-[#EDE8E0] px-3 py-2 text-sm text-[#2D2D2D] shadow-sm outline-none transition placeholder:text-[#C5C0BA] hover:border-[#8B6BB5] focus:border-[#8B6BB5] focus:ring-2 focus:ring-[#D4A5A5]/60 dark:border-[#1A1A1A] dark:bg-[#1A1A1A] dark:text-[#EDE8E0] dark:placeholder:text-[#9A9A9A] dark:hover:border-[#8B6BB5] dark:focus:border-[#8B6BB5] dark:focus:ring-[#8B6BB5]/40"
+              placeholder="any username"
             />
           </div>
           <div className="space-y-1.5">
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+              className="block text-sm font-medium text-[#2D2D2D] dark:text-[#EDE8E0]"
             >
               Password
             </label>
@@ -55,33 +54,24 @@ export default function AuthPage() {
               id="password"
               type="password"
               required
-              className="w-full rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-indigo-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-50 dark:hover:border-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500/40"
-              placeholder="••••••••"
+              className="w-full rounded-xl border border-[#C5C0BA] bg-[#EDE8E0] px-3 py-2 text-sm text-[#2D2D2D] shadow-sm outline-none transition placeholder:text-[#C5C0BA] hover:border-[#8B6BB5] focus:border-[#8B6BB5] focus:ring-2 focus:ring-[#D4A5A5]/60 dark:border-[#1A1A1A] dark:bg-[#1A1A1A] dark:text-[#EDE8E0] dark:placeholder:text-[#9A9A9A] dark:hover:border-[#8B6BB5] dark:focus:border-[#8B6BB5] dark:focus:ring-[#8B6BB5]/40"
+              placeholder="any password"
             />
           </div>
 
           <button
             type="submit"
-            className="mt-4 flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-sky-500 via-indigo-500 to-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/40 transition hover:from-sky-600 hover:via-indigo-600 hover:to-fuchsia-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            disabled={isLoading}
+            className="mt-4 flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#8B6BB5] via-[#D4A5A5] to-[#A8C5C0] px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-[#1A1A1A]/15 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B6BB5] disabled:opacity-50"
           >
-            Continue
+            {isLoading ? "Signing in..." : "Continue"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-slate-500 dark:text-slate-500">
-          Authentication is not implemented yet. This is a preview of the
-          experience.{" "}
-          <Link
-            href="/chat"
-            className="font-medium text-indigo-500 underline-offset-2 hover:underline"
-          >
-            Skip to chat
-          </Link>
-          .
+        <p className="mt-6 text-center text-xs text-[#9A9A9A] dark:text-[#9A9A9A]">
+          Any credentials will work until authentication is set up.
         </p>
       </div>
     </div>
   );
 }
-
-

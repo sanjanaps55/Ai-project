@@ -10,19 +10,19 @@ export const AssessmentCard = ({
   onStart,
 }: AssessmentCardProps) => {
   return (
-    <article className="flex flex-col justify-between rounded-2xl border border-slate-200/70 bg-white/80 p-4 text-sm shadow-sm shadow-slate-900/5 transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md hover:shadow-indigo-200/40 dark:border-slate-700 dark:bg-slate-900/80 dark:hover:border-indigo-500/60 dark:hover:shadow-indigo-900/60">
+    <article className="flex flex-col justify-between rounded-2xl border border-[#C5C0BA] bg-[#EDE8E0] p-4 text-sm backdrop-blur-sm transition hover:-translate-y-0.5 hover:border-[#8B6BB5] hover:bg-white/80 dark:border-[#1A1A1A] dark:bg-[#1A1A1A] dark:hover:border-[#8B6BB5]">
       <div>
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+        <h3 className="text-sm font-semibold text-[#2D2D2D] dark:text-[#EDE8E0]">
           {title}
         </h3>
-        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+        <p className="mt-2 text-xs text-[#9A9A9A] dark:text-[#C5C0BA]">
           {description}
         </p>
       </div>
       <button
         type="button"
         onClick={onStart}
-        className="mt-4 inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-sky-500 via-indigo-500 to-fuchsia-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-indigo-500/40 transition hover:from-sky-600 hover:via-indigo-600 hover:to-fuchsia-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+        className="mt-4 inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-[#8B6BB5] via-[#D4A5A5] to-[#A8C5C0] px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-[#1A1A1A]/15 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8B6BB5]"
       >
         Start
       </button>

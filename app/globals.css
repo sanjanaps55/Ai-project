@@ -16,12 +16,36 @@
 body {
   margin: 0;
   min-height: 100vh;
+  background: #FAF0E6;
 }
 
+/* Main content shell */
 .glass-panel {
-  @apply rounded-3xl bg-white/70 shadow-lg shadow-slate-900/5 backdrop-blur-sm dark:bg-slate-900/70 dark:shadow-black/50;
+  border-radius: 1.75rem;
+  background: #FAF0E6;
+  box-shadow: 0 20px 40px rgba(80, 60, 40, 0.06);
 }
 
 .page-container {
-  @apply mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col px-4 py-10 sm:px-6 lg:px-8;
+  margin-left: auto;
+  margin-right: auto;
+  min-height: calc(100vh - 4rem);
+  max-width: 72rem;
+  display: flex;
+  flex-direction: column;
+  padding: 2.5rem 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .page-container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page-container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
 }

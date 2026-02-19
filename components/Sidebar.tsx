@@ -1,3 +1,4 @@
+"use client"
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SIDEBAR_LINKS } from "@/constants";
@@ -7,9 +8,6 @@ export const Sidebar = () => {
 
   return (
     <nav className="flex flex-col gap-1 text-sm">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-        Dashboard
-      </p>
       {SIDEBAR_LINKS.map((link) => {
         const isActive = pathname === link.path;
         return (
@@ -18,8 +16,8 @@ export const Sidebar = () => {
             href={link.path}
             className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition ${
               isActive
-                ? "bg-gradient-to-r from-sky-500/90 via-indigo-500/90 to-fuchsia-500/90 text-white shadow-sm shadow-indigo-500/40"
-                : "text-slate-700 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800/80 dark:hover:text-slate-50"
+                ? "bg-gradient-to-r from-[#8B6BB5] via-[#D4A5A5] to-[#A8C5C0] text-white shadow-sm shadow-[#1A1A1A]/15"
+                : "text-[#2D2D2D] hover:bg-[#E0DEDA] hover:text-[#2D2D2D] dark:text-[#EDE8E0] dark:hover:bg-[#1A1A1A]"
             }`}
           >
             <span>{link.name}</span>

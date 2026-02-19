@@ -1,4 +1,4 @@
-export const APP_NAME = "MindCare AI";
+export const APP_NAME = "Nova";
 
 export const TAGLINE = "Your Intelligent Emotional Companion";
 
