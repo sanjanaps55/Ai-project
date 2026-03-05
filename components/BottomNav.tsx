@@ -4,38 +4,36 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const NAV_LINKS = [
-  { name: "Chat", path: "/chat" },
-  { name: "Explore paths", path: "/paths" },
-  { name: "Activities", path: "/activities" },
-  { name: "History", path: "/history" },
+  { name: "Chat", path: "/chat", icon: "💬" },
+  { name: "Explore", path: "/explore", icon: "🧭" },
+  { name: "Path", path: "/path", icon: "✨" },
+  { name: "Activities", path: "/activities", icon: "🧘" },
+  { name: "History", path: "/history", icon: "📖" },
 ];
 
 export const BottomNav = () => {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E8D5C4]/40 bg-[#FAF0E6]">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-2.5 text-xs">
+    <nav className="fixed inset-x-0 bottom-0 z-50 px-4 pb-4 pt-1">
+      <div className="glass-morphism mx-auto flex max-w-md items-center justify-around rounded-[24px] px-1 py-1">
         {NAV_LINKS.map((link) => {
-          const isActive =
-            pathname === link.path ||
-            (link.path !== "/" && pathname?.startsWith(link.path));
+          const isActive = pathname === link.path || (link.path !== "/" && pathname?.startsWith(link.path));
 
           return (
             <Link
               key={link.path}
               href={link.path}
-              className={`flex flex-1 flex-col items-center gap-0.5 ${isActive ? "text-white" : "text-[#9A9A9A]"
+              className={`relative flex flex-col items-center justify-center p-2 transition-all duration-300 ${isActive ? "scale-105" : "opacity-50 hover:opacity-100"
                 }`}
             >
-              <span
-                className={`inline-flex min-w-[64px] items-center justify-center rounded-full px-3 py-1 text-[11px] font-medium ${isActive
-                    ? "bg-gradient-to-r from-[#7C6AAE] via-[#D4A5A5] to-[#A8C5C0] shadow-sm shadow-[#1A1A1A]/15"
-                    : "bg-[#F5E8D8] text-[#2D2D2D]"
-                  }`}
-              >
+              <span className="text-lg mb-0.5">{link.icon}</span>
+              <span className={`text-[9px] font-medium tracking-wide ${isActive ? "text-primary-purple" : "text-white/60"}`}>
                 {link.name}
               </span>
+              {isActive && (
+                <div className="absolute -bottom-0.5 h-0.5 w-0.5 rounded-full bg-primary-purple shadow-[0_0_6px_#C7B8EA]" />
+              )}
             </Link>
           );
         })}

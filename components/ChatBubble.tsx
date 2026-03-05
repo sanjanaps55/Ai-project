@@ -10,24 +10,23 @@ export const ChatBubble = ({ role, content }: ChatBubbleProps) => {
 
   return (
     <div
-      className={`flex w-full gap-3 ${isUser ? "justify-end text-right" : "justify-start text-left"
-        }`}
+      className={`flex w-full gap-3 ${isUser ? "justify-end" : "justify-start"}`}
     >
       {!isUser && (
-        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#7C6AAE] via-[#D4A5A5] to-[#A8C5C0] text-xs font-semibold text-white shadow-sm shadow-[#1A1A1A]/15">
+        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-primary-purple to-secondary text-[10px] font-bold text-bg-dark shadow-[0_0_15px_rgba(199,184,234,0.3)]">
           AI
         </div>
       )}
       <div
-        className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm leading-relaxed shadow-sm ${isUser
-            ? "bg-gradient-to-r from-[#7C6AAE] via-[#D4A5A5] to-[#A8C5C0] text-white shadow-[#1A1A1A]/15"
-            : "bg-[#F5E8D8] text-[#2D2D2D]"
+        className={`max-w-[85%] rounded-2xl px-5 py-3 text-sm leading-relaxed ${isUser
+            ? "bg-primary-purple text-bg-dark font-medium shadow-[0_0_20px_rgba(199,184,234,0.2)]"
+            : "glass-card text-white/90"
           }`}
       >
         {content}
       </div>
       {isUser && (
-        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F5E8D8] text-xs font-semibold text-[#2D2D2D]">
+        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[8px] font-bold text-white/40 uppercase tracking-widest">
           You
         </div>
       )}

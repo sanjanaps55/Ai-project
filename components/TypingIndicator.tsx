@@ -1,11 +1,9 @@
 export const TypingIndicator = () => {
   return (
-    <div className="flex items-center gap-2 text-xs text-[#9A9A9A] dark:text-[#C5C0BA]">
-      <span className="inline-flex h-2 w-2 animate-bounce rounded-full bg-[#8B6BB5] [animation-delay:-0.2s]" />
-      <span className="inline-flex h-2 w-2 animate-bounce rounded-full bg-[#D4A5A5] [animation-delay:-0.1s]" />
-      <span className="inline-flex h-2 w-2 animate-bounce rounded-full bg-[#A8C5C0]" />
+    <div className="flex items-center gap-1.5 px-4 py-2 rounded-2xl bg-white/5 border border-white/5 w-fit">
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary-purple [animation-delay:-0.3s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-secondary [animation-delay:-0.15s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent" />
     </div>
   );
 };
-
-

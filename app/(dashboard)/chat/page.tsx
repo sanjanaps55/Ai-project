@@ -1,137 +1,65 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { MOCK_MESSAGES } from "@/constants";
 import { ChatBubble } from "@/components/ChatBubble";
 import { TypingIndicator } from "@/components/TypingIndicator";
+import { Send, Mic } from "lucide-react";
 
 export default function ChatPage() {
   const [input, setInput] = useState("");
-  const [now, setNow] = useState(new Date());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const day = now.getDay();
-  const daysFromMonday = (day + 6) % 7;
-  const startOfWeek = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() - daysFromMonday,
-  );
-
-  const weekDays = Array.from({ length: 7 }, (_, index) => {
-    const d = new Date(
-      startOfWeek.getFullYear(),
-      startOfWeek.getMonth(),
-      startOfWeek.getDate() + index,
-    );
-    return d;
-  });
-
-  const dayLabels = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
-
-  const formattedHeadlineDate = now.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  });
 
   return (
-    <div className="flex h-[60vh] flex-1 flex-col">
-      {/* Calendar strip */}
-      <div className="mb-4 rounded-2xl bg-[#FAF0E6] p-4">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            {weekDays.map((date, index) => {
-              const isToday =
-                date.getFullYear() === now.getFullYear() &&
-                date.getMonth() === now.getMonth() &&
-                date.getDate() === now.getDate();
+    <div className="flex flex-col h-full">
+      {/* Spacer for TopBar when fixed */}
+      <div className="h-4" />
 
-              return (
-                <div
-                  key={index}
-                  className="flex flex-col items-center gap-1"
-                >
-                  <span
-                    className={`text-[11px] font-medium ${isToday ? "text-[#7C6AAE]" : "text-[#9A9A9A]"
-                      }`}
-                  >
-                    {dayLabels[index]}
-                  </span>
-                  <span
-                    className={`flex h-7 w-7 items-center justify-center rounded-full text-xs ${isToday
-                        ? "bg-[#7C6AAE] font-bold text-white shadow-md shadow-[#7C6AAE]/30"
-                        : "text-[#2D2D2D]"
-                      }`}
-                  >
-                    {date.getDate()}
-                  </span>
-                  {isToday && (
-                    <span className="text-[10px] text-[#7C6AAE]">✓</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <button className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E8D5C4] text-[#9A9A9A] transition hover:bg-[#F5E8D8]">
-            ⚙
-          </button>
-        </div>
-
-        <div className="flex flex-col items-center gap-2 pt-2">
-          <span className="text-3xl">✿</span>
-          <p className="text-[11px] font-medium uppercase tracking-widest text-[#9A9A9A]">
-            {formattedHeadlineDate.toUpperCase()}
-          </p>
-          <p className="text-lg font-light text-[#2D2D2D]">
-            What&apos;s on your mind?
-          </p>
+      {/* Chat area */}
+      <div className="flex-1 space-y-6 overflow-y-auto pb-24 px-2 scrollbar-none min-h-[50vh]">
+        {MOCK_MESSAGES.map((message, index) => (
+          <ChatBubble
+            key={index}
+            role={message.role as "user" | "ai"}
+            content={message.content}
+          />
+        ))}
+        <div className="flex justify-start">
+          <TypingIndicator />
         </div>
       </div>
 
-      {/* Chat area */}
-      <div className="flex flex-1 flex-col overflow-hidden rounded-2xl bg-[#FAF0E6] p-3 text-sm">
-        <div className="flex-1 space-y-4 overflow-y-auto pb-3">
-          {MOCK_MESSAGES.map((message, index) => (
-            <ChatBubble
-              key={index}
-              role={message.role as "user" | "ai"}
-              content={message.content}
-            />
-          ))}
-          <div className="mt-1 flex justify-start">
-            <TypingIndicator />
-          </div>
-        </div>
+      {/* Message Input Bar - Positioned relative to the viewport/container */}
+      <div className="sticky bottom-20 left-0 right-0 z-30 pb-2">
         <form
-          className="mt-3 flex items-end gap-2 rounded-xl border border-[#E8D5C4] bg-[#FAF0E6] p-2"
+          className="glass-morphism rounded-[24px] p-1.5 flex items-center gap-1 shadow-[0_0_40px_rgba(0,0,0,0.5)] border-white/10"
           onSubmit={(e) => {
             e.preventDefault();
+            if (input.trim()) setInput("");
           }}
         >
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            rows={1}
-            className="max-h-32 flex-1 resize-none bg-transparent text-xs text-[#2D2D2D] outline-none placeholder:text-[#C5C0BA]"
-            placeholder="Share what's on your mind..."
-          />
           <button
             type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E8D5C4] bg-[#F5E8D8] text-[13px] text-[#2D2D2D] transition hover:bg-[#FAF0E6]"
+            className="p-2.5 rounded-full hover:bg-white/5 text-white/40 transition-colors"
           >
-            🎤
+            <Mic size={18} />
           </button>
+
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="flex-1 bg-transparent px-2 py-2.5 text-sm text-white outline-none placeholder:text-white/20"
+            placeholder="Send a message..."
+          />
+
           <button
             type="submit"
-            className="inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#7C6AAE] via-[#D4A5A5] to-[#A8C5C0] px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-[#1A1A1A]/15 transition hover:brightness-110"
+            disabled={!input.trim()}
+            className={`p-2.5 rounded-full transition-all ${input.trim()
+              ? "bg-primary-purple text-bg-dark shadow-[0_0_20px_rgba(199,184,234,0.3)] scale-100"
+              : "bg-white/5 text-white/20 scale-90"
+              }`}
           >
-            Send
+            <Send size={18} />
           </button>
         </form>
       </div>

@@ -1,49 +1,66 @@
 "use client";
 
-import { useState } from "react";
-import { MOCK_HISTORY } from "@/constants";
+import { Calendar, Clock, MessageCircle } from "lucide-react";
 
 export default function HistoryPage() {
-  const [query, setQuery] = useState("");
-
-  const filtered = MOCK_HISTORY.filter(
-    (item) =>
-      item.date.toLowerCase().includes(query.toLowerCase()) ||
-      item.summary.toLowerCase().includes(query.toLowerCase()),
-  );
+  const historyItems = [
+    {
+      date: "Today", items: [
+        { title: "Morning Reflection", time: "9:00 AM", type: "Chat" },
+        { title: "Stress Management", time: "2:30 PM", type: "Path" }
+      ]
+    },
+    {
+      date: "Yesterday", items: [
+        { title: "Anxiety Relief", time: "4:30 PM", type: "Chat" },
+        { title: "Mood Check-in", time: "10:15 AM", type: "Mood" }
+      ]
+    },
+    {
+      date: "Mar 3, 2026", items: [
+        { title: "Deep Sleep Meditation", time: "11:00 PM", type: "Activity" }
+      ]
+    }
+  ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center">
-        <div className="relative flex-1">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search..."
-            className="w-full rounded-xl border border-[#E8D5C4] bg-[#FAF0E6] px-3 py-2 text-xs text-[#2D2D2D] shadow-sm outline-none transition placeholder:text-[#C5C0BA] hover:border-[#7C6AAE] focus:border-[#7C6AAE] focus:ring-2 focus:ring-[#D4A5A5]/60"
-          />
-        </div>
+    <div className="space-y-8 py-6">
+      <div className="flex flex-col items-center text-center">
+        <h1 className="text-3xl font-bold mb-2">History</h1>
+        <p className="text-white/40 text-sm">Review your journey and progress</p>
       </div>
 
-      <div className="space-y-3">
-        {filtered.map((session) => (
-          <article
-            key={session.date + session.summary}
-            className="rounded-2xl border border-[#E8D5C4] bg-[#FAF0E6] p-3 text-xs transition hover:border-[#7C6AAE] hover:bg-white/80"
-          >
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#9A9A9A]">
-              {session.date}
-            </p>
-            <p className="mt-1 text-[13px] text-[#2D2D2D]">
-              {session.summary}
-            </p>
-          </article>
+      <div className="space-y-8">
+        {historyItems.map((group, groupIdx) => (
+          <div key={groupIdx} className="space-y-4">
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 pl-4 border-l border-white/10">
+              {group.date}
+            </h3>
+            <div className="space-y-3">
+              {group.items.map((item, idx) => (
+                <div key={idx} className="glass-card p-4 hover:bg-white/5 transition-colors cursor-pointer">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 rounded-xl bg-white/5 text-primary-purple">
+                        <MessageCircle size={18} />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold">{item.title}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Clock size={10} className="text-white/30" />
+                          <span className="text-[10px] text-white/40">{item.time}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] px-2 py-1 rounded-full bg-white/5 text-white/40 border border-white/10">
+                      {item.type}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         ))}
-        {filtered.length === 0 && (
-          <p className="text-xs italic text-[#9A9A9A]">
-            No sessions found.
-          </p>
-        )}
       </div>
     </div>
   );

@@ -9,15 +9,16 @@ export const Navbar = () => {
 
   const isDashboardRoute =
     pathname?.startsWith("/chat") ||
-    pathname?.startsWith("/paths") ||
+    pathname?.startsWith("/explore") ||
+    pathname?.startsWith("/path") ||
     pathname?.startsWith("/activities") ||
     pathname?.startsWith("/history");
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[#E8D5C4]/40 bg-[#FAF0E6]">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+    <header className="sticky top-0 z-40 border-b border-[#E8E4DF]/50 bg-[#F5F2ED]/80 backdrop-blur-md">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
         <Link href="/" className="flex items-center">
-          <span className="text-lg font-semibold tracking-tight text-[#2D2D2D]">
+          <span className="text-xl font-bold tracking-tight text-[#3A3A3A]">
             {APP_NAME}
           </span>
         </Link>
@@ -26,7 +27,7 @@ export const Navbar = () => {
           {!isDashboardRoute && (
             <Link
               href="/auth"
-              className="rounded-full border border-[#E8D5C4] bg-[#FAF0E6] px-4 py-1.5 text-sm font-medium text-[#2D2D2D] shadow-sm transition hover:border-[#7C6AAE] hover:bg-white"
+              className="rounded-full border border-[#E8E4DF] bg-[#F9F7F4] px-5 py-2 text-sm font-medium text-[#3A3A3A] shadow-sm transition hover:border-[#706299] hover:bg-white"
             >
               Sign in
             </Link>
