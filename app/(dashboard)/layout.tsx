@@ -16,7 +16,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       <TopBar onMenuClick={() => setIsDrawerOpen(true)} />
 
-      <main className="flex-1 pb-24 px-6 safe-bottom">
+      <main className="flex-1 pb-24 pt-4 px-4 md:px-6 safe-bottom w-full">
         {children}
       </main>
     </div>

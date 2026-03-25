@@ -1,6 +1,8 @@
 "use client";
 
 import { User, Bell, LifeBuoy, ShieldCheck, LogOut, ChevronRight, Moon, Globe } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
 
 interface SettingsItem {
     icon: React.ReactNode;
@@ -14,6 +16,15 @@ interface SettingsSection {
 }
 
 export default function SettingsPage() {
+    const router = useRouter();
+
+    async function handleLogout() {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+        router.replace("/login");
+        router.refresh();
+    }
+
     const sections: SettingsSection[] = [
         {
             title: "Account",
@@ -74,7 +85,10 @@ export default function SettingsPage() {
                     </div>
                 ))}
 
-                <button className="w-full glass-morphism rounded-[32px] p-5 flex items-center justify-center gap-3 text-red-400 font-bold hover:bg-red-400/10 transition-all border-red-400/10">
+                <button
+                    onClick={handleLogout}
+                    className="w-full glass-morphism rounded-[32px] p-5 flex items-center justify-center gap-3 text-red-400 font-bold hover:bg-red-400/10 transition-all border-red-400/10"
+                >
                     <LogOut size={18} />
                     <span className="text-sm">Log Out</span>
                 </button>

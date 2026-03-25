@@ -26,7 +26,7 @@ export const Navbar = () => {
         <nav className="flex items-center gap-4">
           {!isDashboardRoute && (
             <Link
-              href="/auth"
+              href="/login"
               className="rounded-full border border-[#E8E4DF] bg-[#F9F7F4] px-5 py-2 text-sm font-medium text-[#3A3A3A] shadow-sm transition hover:border-[#706299] hover:bg-white"
             >
               Sign in
