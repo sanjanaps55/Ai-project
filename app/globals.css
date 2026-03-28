@@ -82,6 +82,68 @@ body {
   animation: pulse-glow 8s ease-in-out infinite;
 }
 
+@keyframes listening-red-glow {
+  0%, 100% {
+    box-shadow: 0 0 50px 20px rgba(239, 68, 68, 0.4), 0 0 100px 40px rgba(255, 255, 255, 0.2);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 80px 40px rgba(239, 68, 68, 0.6), 0 0 140px 60px rgba(255, 255, 255, 0.4);
+    transform: scale(1.1);
+  }
+}
+
+@keyframes thinking-purple-glow {
+  0%, 100% {
+    box-shadow: 0 0 50px 20px rgba(168, 85, 247, 0.4), 0 0 100px 40px rgba(199, 184, 234, 0.2);
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    box-shadow: 0 0 70px 30px rgba(168, 85, 247, 0.5), 0 0 120px 50px rgba(199, 184, 234, 0.3);
+    transform: rotate(180deg) scale(1.05);
+  }
+}
+
+@keyframes speaking-cyan-glow {
+  0%, 100% {
+    box-shadow: 0 0 50px 20px rgba(34, 211, 238, 0.4), 0 0 100px 40px rgba(255, 255, 255, 0.2);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 80px 40px rgba(34, 211, 238, 0.6), 0 0 140px 60px rgba(255, 255, 255, 0.4);
+    transform: scale(1.15);
+  }
+}
+
+.animate-listening {
+  animation: listening-red-glow 2s ease-in-out infinite;
+}
+
+.animate-thinking {
+  animation: thinking-purple-glow 3s linear infinite;
+}
+
+.animate-speaking {
+  animation: speaking-cyan-glow 2.5s ease-in-out infinite;
+}
+
+@keyframes idle-breathing {
+  0%, 100% {
+    box-shadow: 0 0 30px 10px rgba(112, 98, 153, 0.2);
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    box-shadow: 0 0 40px 15px rgba(112, 98, 153, 0.3);
+    transform: scale(1.02);
+    opacity: 0.5;
+  }
+}
+
+.animate-idle {
+  animation: idle-breathing 4s ease-in-out infinite;
+}
+
 /* Gradient Text */
 .text-gradient {
   background: linear-gradient(135deg, #C7B8EA 0%, #F7D8BA 100%);

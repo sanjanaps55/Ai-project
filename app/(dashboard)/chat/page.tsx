@@ -5,8 +5,9 @@ import { createClient } from "@/utils/supabase/client";
 import { ChatBubble } from "@/components/ChatBubble";
 import { TypingIndicator } from "@/components/TypingIndicator";
 import { useVoice } from "@/hooks/useVoice";
-import { Send, Mic, MicOff } from "lucide-react";
+import { Send, Mic, MicOff, PhoneOff } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { VoiceInteractionOverlay } from "@/components/VoiceInteractionOverlay";
 
 interface Message {
     id?: string;
@@ -16,14 +17,26 @@ interface Message {
 
 export default function ChatPage() {
     const [input, setInput] = useState("");
+    const [interim, setInterim] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [isVoiceMode, setIsVoiceMode] = useState(false);
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { isListening, startListening, stopListening, speak, isSupported } = useVoice();
+    const { 
+        isListening, 
+        isSpeaking, 
+        voiceStatus, 
+        setVoiceStatus, 
+        startListening, 
+        stopListening, 
+        speak, 
+        stopSpeaking, 
+        isSupported 
+    } = useVoice();
 
     // Load existing conversation if ID is in URL
     useEffect(() => {
@@ -101,6 +114,9 @@ export default function ChatPage() {
             const aiMessage: Message = { role: "assistant", content: data.response };
             setMessages((prev) => [...prev, aiMessage]);
 
+            // Speak the AI response automatically
+            speak(data.response);
+
             // Update conversation ID if this was a new conversation
             if (data.isNewConversation && data.conversationId) {
                 setConversationId(data.conversationId);
@@ -118,15 +134,99 @@ export default function ChatPage() {
         }
     }
 
-    function handleMicClick() {
-        if (isListening) {
-            stopListening();
-        } else {
-            startListening((transcript) => {
-                setInput((prev) => (prev ? prev + " " + transcript : transcript));
+    async function handleVoiceFinal(transcript: string) {
+        if (!transcript || isLoading) return;
+
+        // 1. Add User message to DB & UI (hidden during voice mode)
+        const userMessage: Message = { role: "user", content: transcript };
+        setMessages((prev) => [...prev, userMessage]);
+        
+        // 2. Set thinking state for UI
+        setVoiceStatus("thinking");
+        setIsLoading(true);
+
+        try {
+            // 3. Call AI
+            const response = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    message: transcript,
+                    conversationId,
+                }),
             });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                setVoiceStatus("error");
+                return;
+            }
+
+            // 4. Update conversation context
+            if (data.isNewConversation && data.conversationId) {
+                setConversationId(data.conversationId);
+                router.replace(`/chat?id=${data.conversationId}`, { scroll: false });
+            }
+
+            // 5. Add AI response to bubbles (hidden)
+            const aiMessage: Message = { role: "assistant", content: data.response };
+            setMessages((prev) => [...prev, aiMessage]);
+
+            // 6. Speak the AI response
+            // setVoiceStatus("speaking") is handled internally inside useVoice.speak()
+            await speak(data.response);
+
+            // 7. After speaking ends, start listening again automatically!
+            // Note: useVoice.speak() resolves when audio ends (due to awaited speak? wait no, speak doesn't await the end)
+            // Actually let's manually re-trigger listening when speaking ends via useEffect or callback
+        } catch (err) {
+            console.error("Voice mode error:", err);
+            setVoiceStatus("error");
+        } finally {
+            setIsLoading(false);
         }
     }
+
+    function handleMicClick() {
+        if (isVoiceMode) {
+            // Already in voice mode, maybe just toggle mute
+            if (isListening) stopListening();
+            else startRecording();
+        } else {
+            // Enter Voice Mode
+            setIsVoiceMode(true);
+            startRecording();
+        }
+    }
+
+    function startRecording() {
+        startListening((transcript: string, isFinal: boolean, isSpeechFinal: boolean) => {
+            if (isSpeechFinal) {
+                // User stopped speaking!
+                handleVoiceFinal(transcript);
+                setInterim("");
+            } else if (isFinal) {
+                // Partial final result
+                setInterim("");
+            } else {
+                setInterim(transcript);
+            }
+        });
+    }
+
+    // Effect to auto-restart listening after speaking in Voice Mode
+    useEffect(() => {
+        if (isVoiceMode && !isSpeaking && !isListening && !isLoading && voiceStatus === 'idle') {
+            // Small delay to prevent echo or immediate trigger
+            const timer = setTimeout(() => {
+                if (isVoiceMode && !isSpeaking && !isListening) {
+                    startRecording();
+                }
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [isVoiceMode, isSpeaking, isListening, isLoading, voiceStatus]);
 
     return (
         <div className="flex flex-col w-full max-w-4xl mx-auto h-[650px] rounded-[2rem] border border-white/5 bg-[#1A1A2E]/20 backdrop-blur-2xl shadow-[0_8px_40px_rgba(0,0,0,0.6)] overflow-hidden relative mt-2">
@@ -194,6 +294,8 @@ export default function ChatPage() {
                             onClick={handleMicClick}
                             className={`p-3 rounded-full transition-all ${isListening
                                 ? "bg-red-500/20 text-red-400 animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.2)]"
+                                : isSpeaking
+                                ? "bg-cyan-500/20 text-cyan-400 animate-pulse shadow-[0_0_20px_rgba(34,211,238,0.2)]"
                                 : "hover:bg-white/5 text-white/50 hover:text-white/80"
                                 }`}
                             disabled={!isSupported}
@@ -203,12 +305,14 @@ export default function ChatPage() {
                     </div>
 
                     <input
-                        value={input}
+                        value={interim ? `${input} ${interim}`.trim() : input}
                         onChange={(e) => setInput(e.target.value)}
                         className="flex-1 bg-transparent px-3 py-3 text-sm text-white/90 outline-none placeholder:text-white/30 font-medium"
                         placeholder={isListening ? "Listening..." : "Tell me what's on your mind..."}
                         disabled={isLoading}
+                        suppressHydrationWarning={true}
                     />
+
 
                     <button
                         type="submit"
@@ -222,6 +326,19 @@ export default function ChatPage() {
                     </button>
                 </form>
             </div>
+
+            {/* Voice Interaction Overlay */}
+            {isVoiceMode && (
+                <VoiceInteractionOverlay 
+                    status={voiceStatus} 
+                    onExit={() => {
+                        setIsVoiceMode(false);
+                        stopListening();
+                        stopSpeaking();
+                    }} 
+                    interimTranscript={interim}
+                />
+            )}
         </div>
     );
 }

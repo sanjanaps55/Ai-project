@@ -1,51 +1,17 @@
 "use client";
 
-// Web Speech API type declarations (not in default TS lib)
-interface SpeechRecognitionEvent extends Event {
-    results: SpeechRecognitionResultList;
-}
+import { useState, useRef, useCallback, useEffect } from "react";
 
-interface SpeechRecognitionResultList {
-    readonly length: number;
-    [index: number]: SpeechRecognitionResult;
-}
-
-interface SpeechRecognitionResult {
-    readonly length: number;
-    [index: number]: SpeechRecognitionAlternative;
-}
-
-interface SpeechRecognitionAlternative {
-    transcript: string;
-    confidence: number;
-}
-
-interface SpeechRecognition extends EventTarget {
-    lang: string;
-    interimResults: boolean;
-    continuous: boolean;
-    onresult: ((event: SpeechRecognitionEvent) => void) | null;
-    onend: (() => void) | null;
-    onerror: ((event: Event) => void) | null;
-    start(): void;
-    stop(): void;
-}
-
-declare global {
-    interface Window {
-        SpeechRecognition: new () => SpeechRecognition;
-        webkitSpeechRecognition: new () => SpeechRecognition;
-    }
-}
-
-import { useState, useRef, useCallback } from "react";
+export type VoiceStatus = "idle" | "listening" | "thinking" | "speaking" | "error";
 
 interface UseVoiceReturn {
     isListening: boolean;
     isSpeaking: boolean;
-    startListening: (onResult: (transcript: string) => void) => void;
+    voiceStatus: VoiceStatus;
+    setVoiceStatus: (status: VoiceStatus) => void;
+    startListening: (onResult: (transcript: string, isFinal: boolean, speechFinal: boolean) => void) => Promise<void>;
     stopListening: () => void;
-    speak: (text: string) => void;
+    speak: (text: string) => Promise<void>;
     stopSpeaking: () => void;
     isSupported: boolean;
 }
@@ -53,78 +19,183 @@ interface UseVoiceReturn {
 export function useVoice(): UseVoiceReturn {
     const [isListening, setIsListening] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
-    const recognitionRef = useRef<SpeechRecognition | null>(null);
+    const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>("idle");
+    const [isSupported, setIsSupported] = useState(false);
+    
+    // Refs for Deepgram logic
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const socketRef = useRef<WebSocket | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    
+    // Ref for ElevenLabs audio playback
+    const audioRef = useRef<HTMLAudioElement | null>(null);
 
-    const isSupported = typeof window !== "undefined" && (
-        "SpeechRecognition" in window || "webkitSpeechRecognition" in window
-    );
-
-    const startListening = useCallback((onResult: (transcript: string) => void) => {
-        if (!isSupported) return;
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-
-        recognition.lang = "en-US";
-        recognition.interimResults = false;
-        recognition.continuous = false;
-
-        recognition.onresult = (event: SpeechRecognitionEvent) => {
-            const transcript = event.results[0][0].transcript;
-            onResult(transcript);
+    // Clean up on unmount and check for support
+    useEffect(() => {
+        if (typeof window !== "undefined" && !!navigator.mediaDevices?.getUserMedia) {
+            setIsSupported(true);
+        }
+        return () => {
+            stopListening();
+            stopSpeaking();
         };
-
-        recognition.onend = () => {
-            setIsListening(false);
-        };
-
-        recognition.onerror = () => {
-            setIsListening(false);
-        };
-
-        recognitionRef.current = recognition;
-        recognition.start();
-        setIsListening(true);
-    }, [isSupported]);
-
-    const stopListening = useCallback(() => {
-        recognitionRef.current?.stop();
-        setIsListening(false);
-    }, []);
-
-    const speak = useCallback((text: string) => {
-        if (typeof window === "undefined" || !window.speechSynthesis) return;
-
-        // Cancel any ongoing speech
-        window.speechSynthesis.cancel();
-
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.95;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-
-        // Try to use a natural voice
-        const voices = window.speechSynthesis.getVoices();
-        const preferred = voices.find(
-            (v) => v.name.includes("Google") || v.name.includes("Natural") || v.name.includes("Samantha")
-        );
-        if (preferred) utterance.voice = preferred;
-
-        utterance.onstart = () => setIsSpeaking(true);
-        utterance.onend = () => setIsSpeaking(false);
-        utterance.onerror = () => setIsSpeaking(false);
-
-        window.speechSynthesis.speak(utterance);
     }, []);
 
     const stopSpeaking = useCallback(() => {
-        window.speechSynthesis?.cancel();
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            audioRef.current = null;
+        }
         setIsSpeaking(false);
+        setVoiceStatus("idle");
     }, []);
+
+    const stopListening = useCallback(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+            mediaRecorderRef.current.stop();
+        }
+        if (socketRef.current) {
+            socketRef.current.close();
+            socketRef.current = null;
+        }
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        setIsListening(false);
+        setVoiceStatus("idle");
+    }, []);
+
+    const startListening = useCallback(async (onResult: (transcript: string, isFinal: boolean, speechFinal: boolean) => void) => {
+        if (!isSupported) return;
+
+        // If the AI is currently talking, interrupt it!
+        stopSpeaking();
+
+        try {
+            // 1. Get a temporary Deepgram Key
+            const response = await fetch('/api/deepgram');
+            const data = await response.json();
+            
+            if (!response.ok) {
+                console.error("Failed to get Deepgram key", data.error);
+                return;
+            }
+
+            // 2. Open Deepgram WebSocket
+            const socket = new WebSocket(`wss://api.deepgram.com/v1/listen?model=nova-2-conversationalai&smart_format=true&interim_results=true`, ['token', data.key]);
+            socketRef.current = socket;
+
+            // 3. Setup Mic Stream
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            streamRef.current = stream;
+
+            socket.onopen = () => {
+                const mediaRecorder = new MediaRecorder(stream);
+                mediaRecorderRef.current = mediaRecorder;
+
+                mediaRecorder.addEventListener("dataavailable", (event) => {
+                    if (event.data.size > 0 && socket.readyState === 1) {
+                        socket.send(event.data);
+                    }
+                });
+
+                // Send chunks every 250ms for real-time latency
+                mediaRecorder.start(250);
+                setIsListening(true);
+                setVoiceStatus("listening");
+            };
+
+            socket.onmessage = (message) => {
+                const received = JSON.parse(message.data);
+                
+                // Add this guard for non-transcript messages (like metadata or heartbeats)
+                if (!received.channel || !received.channel.alternatives) {
+                    return;
+                }
+
+                const transcript = received.channel.alternatives[0].transcript;
+                const isSpeechFinal = received.speech_final || false;
+
+                
+                if (transcript && received.is_final) {
+                    onResult(transcript, true, isSpeechFinal);
+                } else if (transcript) {
+                    onResult(transcript, false, false);
+                }
+            };
+
+            socket.onerror = (error) => {
+                console.error("Deepgram WebSocket Error", error);
+                stopListening();
+            };
+
+            socket.onclose = () => {
+                setIsListening(false);
+            };
+
+        } catch (err) {
+            console.error("Error starting voice recognition:", err);
+            setVoiceStatus("error");
+            stopListening();
+        }
+    }, [isSupported, stopSpeaking, stopListening]);
+
+    const speak = useCallback(async (text: string) => {
+        if (!text) return;
+        
+        // Stop any current audio
+        stopSpeaking();
+        
+        // Immediately pause listening if we are going to speak, 
+        // to prevent capturing AI response in the mic (if not using headphones)
+        stopListening();
+
+        setIsSpeaking(true);
+        setVoiceStatus("speaking");
+
+        try {
+            const res = await fetch("/api/tts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text })
+            });
+
+            if (!res.ok) {
+                console.error("Failed to fetch TTS audio");
+                setIsSpeaking(false);
+                return;
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            audioRef.current = audio;
+
+            audio.onended = () => {
+                setIsSpeaking(false);
+                URL.revokeObjectURL(url);
+            };
+
+            audio.onerror = () => {
+                setIsSpeaking(false);
+                URL.revokeObjectURL(url);
+            };
+
+            await audio.play();
+        } catch (e) {
+            console.error("Failed to play TTS audio", e);
+            setIsSpeaking(false);
+            setVoiceStatus("idle");
+        }
+    }, [stopSpeaking, stopListening]);
 
     return {
         isListening,
         isSpeaking,
+        voiceStatus,
+        setVoiceStatus,
         startListening,
         stopListening,
         speak,
