@@ -117,7 +117,7 @@ export const SidebarDrawer = ({ isOpen, onClose }: SidebarDrawerProps) => {
                 <div className="flex flex-col h-full p-6">
                     <div className="flex items-center justify-between mb-8">
                         <h3 className="text-xl font-bold">Conversations</h3>
-                        <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full">
+                        <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full" suppressHydrationWarning={true}>
                             <X size={20} className="text-white/60" />
                         </button>
                     </div>
@@ -125,6 +125,7 @@ export const SidebarDrawer = ({ isOpen, onClose }: SidebarDrawerProps) => {
                     <button
                         onClick={handleNewChat}
                         className="flex items-center gap-2 w-full p-4 rounded-2xl bg-primary-purple text-bg-dark font-bold mb-8 hover:brightness-110 active:scale-[0.98] transition-all"
+                        suppressHydrationWarning={true}
                     >
                         <Plus size={18} />
                         <span>New Chat</span>
@@ -139,10 +140,19 @@ export const SidebarDrawer = ({ isOpen, onClose }: SidebarDrawerProps) => {
                             </div>
                         ) : (
                             conversations.map((chat) => (
-                                <button
+                                <div
                                     key={chat.id}
+                                    role="button"
+                                    tabIndex={0}
                                     onClick={() => handleSelectConversation(chat.id)}
-                                    className="w-full text-left p-4 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/10 transition-colors group"
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault();
+                                            handleSelectConversation(chat.id);
+                                        }
+                                    }}
+                                    className="w-full text-left p-4 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/10 transition-colors group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary-purple/50"
+                                    suppressHydrationWarning={true}
                                 >
                                     <div className="flex items-start gap-3">
                                         <MessageSquare size={16} className="mt-1 text-primary-purple opacity-70 group-hover:opacity-100 shrink-0" />
@@ -151,14 +161,16 @@ export const SidebarDrawer = ({ isOpen, onClose }: SidebarDrawerProps) => {
                                             <p className="text-[10px] text-white/40 mt-1">{formatTime(chat.updated_at)}</p>
                                         </div>
                                         <button
+                                            type="button"
                                             onClick={(e) => handleDeleteConversation(e, chat.id)}
-                                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded-full transition-all"
+                                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded-full transition-all shrink-0"
                                             title="Delete conversation"
+                                            suppressHydrationWarning={true}
                                         >
                                             <Trash2 size={12} className="text-red-400" />
                                         </button>
                                     </div>
-                                </button>
+                                </div>
                             ))
                         )}
                     </div>

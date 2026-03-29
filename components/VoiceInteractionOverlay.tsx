@@ -1,7 +1,7 @@
 "use client";
 
 import { VoiceStatus } from "@/hooks/useVoice";
-import { X, Mic, MicOff, Loader2 } from "lucide-react";
+import { X, Mic, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface VoiceInteractionOverlayProps {
@@ -58,23 +58,22 @@ export const VoiceInteractionOverlay = ({ status, onExit, interimTranscript }: V
             {/* Central Glow Orb */}
             <div className="relative flex items-center justify-center w-64 h-64">
                 <div className={`absolute inset-0 rounded-full blur-[60px] transition-all duration-1000 ${getGlowClass()}`} />
-                
-                {/* Inner Icon Circle */}
+
                 <div className="relative z-10 w-32 h-32 rounded-full border border-white/10 bg-white/5 backdrop-blur-md flex items-center justify-center shadow-inner">
-                   {status === "thinking" ? (
-                       <Loader2 className="text-purple-300 animate-spin" size={40} />
-                   ) : status === "listening" ? (
-                       <Mic className="text-red-400 animate-pulse" size={40} />
-                   ) : status === "speaking" ? (
-                       <div className="flex gap-1 items-end h-8">
-                           <div className="w-1.5 bg-cyan-400 rounded-full animate-[bounce_1s_infinite_0ms]" />
-                           <div className="w-1.5 bg-cyan-400 rounded-full animate-[bounce_1s_infinite_200ms]" />
-                           <div className="w-1.5 bg-cyan-400 rounded-full animate-[bounce_1s_infinite_400ms]" />
-                           <div className="w-1.5 bg-cyan-400 rounded-full animate-[bounce_1s_infinite_600ms]" />
-                       </div>
-                   ) : (
-                       <Mic className="text-white/20" size={40} />
-                   )}
+                    {status === "thinking" ? (
+                        <Loader2 className="text-purple-300 animate-spin" size={40} />
+                    ) : status === "listening" ? (
+                        <Mic className="text-red-400 animate-pulse" size={40} />
+                    ) : status === "speaking" ? (
+                        <div className="flex gap-1 items-end h-8">
+                            <div className="w-1.5 bg-cyan-400 rounded-full animate-[bounce_1s_infinite_0ms]" />
+                            <div className="w-1.5 bg-cyan-400 rounded-full animate-[bounce_1s_infinite_200ms]" />
+                            <div className="w-1.5 bg-cyan-400 rounded-full animate-[bounce_1s_infinite_400ms]" />
+                            <div className="w-1.5 bg-cyan-400 rounded-full animate-[bounce_1s_infinite_600ms]" />
+                        </div>
+                    ) : (
+                        <Mic className="text-white/20" size={40} />
+                    )}
                 </div>
             </div>
 

@@ -1,0 +1,265 @@
+import { createClient } from "@/utils/supabase/server";
+import { THERAPIST_SYSTEM_PROMPT, buildConversationTitle } from "@/utils/therapist-prompt";
+import {
+    fetchConversationSummaryForContext,
+    linkConversationToTranscriptMessage,
+    updateSummaryAndMemory,
+} from "@/app/api/chat/summary-memory";
+import { readGeminiTextStream } from "@/utils/gemini-stream";
+import { NextRequest } from "next/server";
+
+const GEMINI_STREAM_URL =
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent";
+const MESSAGE_CONTEXT_LIMIT = 30;
+
+/** NDJSON lines: meta, t (delta), done | error */
+export async function POST(request: NextRequest) {
+    try {
+        const supabase = await createClient();
+        const {
+            data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+            return Response.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { message, conversationId } = await request.json();
+
+        if (!message || typeof message !== "string") {
+            return Response.json({ error: "Message is required" }, { status: 400 });
+        }
+
+        let convId = conversationId as string | null;
+        let isNewConversation = false;
+
+        if (!convId) {
+            const { data: newConv, error: convError } = await supabase
+                .from("conversations")
+                .insert({
+                    user_id: user.id,
+                    title: buildConversationTitle(message),
+                })
+                .select("id")
+                .single();
+
+            if (convError || !newConv) {
+                return Response.json(
+                    { error: "Failed to create conversation in database" },
+                    { status: 500 }
+                );
+            }
+            convId = newConv.id;
+            isNewConversation = true;
+        } else {
+            const { data: existingConv, error: checkError } = await supabase
+                .from("conversations")
+                .select("id")
+                .eq("id", convId)
+                .single();
+
+            if (checkError || !existingConv) {
+                return Response.json(
+                    { error: "Conversation not found. It may have been deleted." },
+                    { status: 404 }
+                );
+            }
+        }
+
+        const { data: msgData, error: selectError } = await supabase
+            .from("messages")
+            .select("id, conversation_id, transcript")
+            .eq("conversation_id", convId)
+            .limit(1);
+
+        if (selectError) {
+            console.error("Select transcript error:", selectError);
+        }
+
+        const existingRow = msgData && msgData.length > 0 ? msgData[0] : null;
+        let transcript: { role: string; content: string }[] =
+            (existingRow?.transcript as { role: string; content: string }[]) || [];
+        let isExistingRow = !!existingRow;
+        let messagesRowId: string | null = (existingRow?.id as string) ?? null;
+
+        const saveTranscript = async (t: { role: string; content: string }[]) => {
+            if (isExistingRow && messagesRowId) {
+                const { error } = await supabase.from("messages").update({ transcript: t }).eq("id", messagesRowId);
+                if (error) console.error("Update transcript error:", error);
+            } else if (isExistingRow) {
+                const { error } = await supabase
+                    .from("messages")
+                    .update({ transcript: t })
+                    .eq("conversation_id", convId);
+                if (error) console.error("Update transcript error:", error);
+            } else {
+                const { data: inserted, error } = await supabase
+                    .from("messages")
+                    .insert({ conversation_id: convId, transcript: t })
+                    .select("id")
+                    .single();
+                if (error) console.error("Insert transcript error:", error);
+                else if (inserted?.id) {
+                    messagesRowId = inserted.id as string;
+                    isExistingRow = true;
+                    await linkConversationToTranscriptMessage(supabase, convId as string, messagesRowId);
+                }
+            }
+        };
+
+        transcript.push({ role: "user", content: message });
+
+        const [conversationSummary, memResult] = await Promise.all([
+            fetchConversationSummaryForContext(supabase, convId as string),
+            supabase.from("user_memory").select("structured_memory").eq("user_id", user.id).maybeSingle(),
+        ]);
+
+        const { data: memoryData } = memResult;
+
+        const memoryContent = memoryData?.structured_memory
+            ? JSON.stringify(memoryData.structured_memory, null, 2)
+            : "No overarching memory yet.";
+        let systemContext = THERAPIST_SYSTEM_PROMPT;
+        systemContext += `\n\n## Overarching User Memory Profile:\n${memoryContent}`;
+        if (conversationSummary) {
+            systemContext += `\n\n## Current Conversation Summary:\n${conversationSummary}`;
+        }
+
+        const geminiContents: { role: string; parts: { text: string }[] }[] = [];
+        const recentTranscript = transcript.slice(-MESSAGE_CONTEXT_LIMIT);
+        for (const msg of recentTranscript) {
+            geminiContents.push({
+                role: msg.role === "user" ? "user" : "model",
+                parts: [{ text: msg.content }],
+            });
+        }
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return Response.json({ error: "GEMINI_API_KEY missing" }, { status: 500 });
+        }
+
+        const conversationIdStr = convId as string;
+
+        /** REST streaming expects SSE (`alt=sse`); without it the body format may not match our parser and the model output appears empty → generic fallback reply. */
+        const streamUrl = `${GEMINI_STREAM_URL}?${new URLSearchParams({
+            key: apiKey,
+            alt: "sse",
+        })}`;
+
+        const streamBody = JSON.stringify({
+            system_instruction: { parts: [{ text: systemContext }] },
+            contents: geminiContents,
+            generationConfig: {
+                temperature: 0.85,
+                topP: 0.95,
+                topK: 40,
+                maxOutputTokens: 1024,
+            },
+        });
+
+        const saveUserTurn = saveTranscript(transcript);
+        let geminiResponse: Response;
+        try {
+            geminiResponse = await fetch(streamUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: streamBody,
+                signal: request.signal,
+            });
+        } catch (e) {
+            await saveUserTurn;
+            if (e instanceof Error && e.name === "AbortError") {
+                return new Response(null, { status: 499 });
+            }
+            throw e;
+        }
+        await saveUserTurn;
+
+        if (!geminiResponse.ok) {
+            const errText = await geminiResponse.text();
+            console.error("Gemini stream error:", geminiResponse.status, errText);
+            return Response.json(
+                { error: "AI service error. Please try again." },
+                { status: 502 }
+            );
+        }
+
+        const encoder = new TextEncoder();
+        let fullAi = "";
+
+        const stream = new ReadableStream({
+            async start(controller) {
+                const send = (obj: object) => {
+                    controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+                };
+
+                send({
+                    type: "meta",
+                    conversationId: conversationIdStr,
+                    isNewConversation,
+                });
+
+                try {
+                    for await (const fragment of readGeminiTextStream(geminiResponse)) {
+                        if (request.signal.aborted) {
+                            break;
+                        }
+                        fullAi += fragment;
+                        send({ type: "t", d: fragment });
+                    }
+
+                    if (request.signal.aborted) {
+                        return;
+                    }
+
+                    const aiResponse =
+                        fullAi.trim() ||
+                        "I'm here for you. Could you tell me more about what you're going through?";
+
+                    transcript.push({ role: "assistant", content: aiResponse });
+                    await saveTranscript(transcript);
+
+                    await supabase
+                        .from("conversations")
+                        .update({ updated_at: new Date().toISOString() })
+                        .eq("id", conversationIdStr);
+
+                    if (transcript.length % 2 === 0) {
+                        await updateSummaryAndMemory(
+                            messagesRowId,
+                            user.id,
+                            transcript,
+                            memoryContent,
+                            supabase
+                        );
+                    }
+
+                    send({ type: "done", full: aiResponse });
+                } catch (e) {
+                    if (request.signal.aborted) {
+                        return;
+                    }
+                    console.error("Stream processing error:", e);
+                    send({
+                        type: "error",
+                        message: e instanceof Error ? e.message : "Stream failed",
+                    });
+                } finally {
+                    controller.close();
+                }
+            },
+        });
+
+        return new Response(stream, {
+            headers: {
+                "Content-Type": "application/x-ndjson; charset=utf-8",
+                "Cache-Control": "no-cache",
+            },
+        });
+    } catch (error: unknown) {
+        const msg = error instanceof Error ? error.message : "Internal server error";
+        console.error("Chat stream error:", error);
+        return Response.json({ error: msg }, { status: 500 });
+    }
+}

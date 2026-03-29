@@ -64,7 +64,11 @@ export const ChatBubble = ({ role, content }: ChatBubbleProps) => {
                     : "glass-card text-white/90"
                     }`}
             >
-                {isUser ? content : renderContent(content)}
+                {isUser ? (
+                    <p className="whitespace-normal">{content.replace(/\n+/g, " ").trim()}</p>
+                ) : (
+                    renderContent(content)
+                )}
             </div>
             {isUser && (
                 <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[7px] font-bold text-white/40 uppercase tracking-widest">

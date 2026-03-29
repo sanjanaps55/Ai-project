@@ -30,6 +30,7 @@ export const TopBar = ({ onMenuClick }: { onMenuClick?: () => void }) => {
                 <button
                     onClick={onMenuClick}
                     className="p-2 rounded-full border border-white/10 bg-white/5 active:scale-95 transition-transform"
+                    suppressHydrationWarning={true}
                 >
                     <Menu size={18} className="text-white/80" />
                 </button>
@@ -40,6 +41,7 @@ export const TopBar = ({ onMenuClick }: { onMenuClick?: () => void }) => {
                     <Link
                         href="/profile"
                         className="p-1 rounded-full border border-white/10 bg-white/5 active:scale-95 transition-transform overflow-hidden flex items-center justify-center w-[36px] h-[36px]"
+                        suppressHydrationWarning={true}
                     >
                         {avatarUrl ? (
                             <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
@@ -50,6 +52,7 @@ export const TopBar = ({ onMenuClick }: { onMenuClick?: () => void }) => {
                     <Link
                         href="/settings"
                         className="p-2 rounded-full border border-white/10 bg-white/5 active:scale-95 transition-transform"
+                        suppressHydrationWarning={true}
                     >
                         <Settings size={18} className="text-white/80" />
                     </Link>

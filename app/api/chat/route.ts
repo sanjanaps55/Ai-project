@@ -1,5 +1,10 @@
 import { createClient } from "@/utils/supabase/server";
-import { THERAPIST_SYSTEM_PROMPT, SUMMARY_PROMPT, MEMORY_UPDATE_PROMPT, buildConversationTitle } from "@/utils/therapist-prompt";
+import { THERAPIST_SYSTEM_PROMPT, buildConversationTitle } from "@/utils/therapist-prompt";
+import {
+    fetchConversationSummaryForContext,
+    linkConversationToTranscriptMessage,
+    updateSummaryAndMemory,
+} from "@/app/api/chat/summary-memory";
 import { NextRequest } from "next/server";
 
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
@@ -59,7 +64,7 @@ export async function POST(request: NextRequest) {
         // Fetch current transcript
         const { data: msgData, error: selectError } = await supabase
             .from("messages")
-            .select("conversation_id, transcript")
+            .select("id, conversation_id, transcript")
             .eq("conversation_id", convId)
             .limit(1);
 
@@ -68,55 +73,47 @@ export async function POST(request: NextRequest) {
         }
 
         const existingRow = msgData && msgData.length > 0 ? msgData[0] : null;
-        let transcript: { role: string; content: string }[] = existingRow?.transcript || [];
+        let transcript: { role: string; content: string }[] =
+            (existingRow?.transcript as { role: string; content: string }[]) || [];
         let isExistingRow = !!existingRow;
+        let messagesRowId: string | null = (existingRow?.id as string) ?? null;
 
         const saveTranscript = async (t: { role: string; content: string }[]) => {
-            if (isExistingRow) {
-                const { error } = await supabase.from("messages").update({
-                    transcript: t
-                }).eq("conversation_id", convId);
-                if (error) {
-                    console.error("Update transcript error:", error);
-                    // Continuing without throwing so the UI is not blocked
-                }
+            if (isExistingRow && messagesRowId) {
+                const { error } = await supabase.from("messages").update({ transcript: t }).eq("id", messagesRowId);
+                if (error) console.error("Update transcript error:", error);
+            } else if (isExistingRow) {
+                const { error } = await supabase.from("messages").update({ transcript: t }).eq("conversation_id", convId);
+                if (error) console.error("Update transcript error:", error);
             } else {
-                const { error } = await supabase.from("messages").insert({
-                    conversation_id: convId,
-                    transcript: t
-                });
+                const { data: inserted, error } = await supabase
+                    .from("messages")
+                    .insert({ conversation_id: convId, transcript: t })
+                    .select("id")
+                    .single();
                 if (error) {
                     console.error("Insert transcript error:", error);
-                    // Continuing without throwing so the UI is not blocked
-                } else {
-                    isExistingRow = true; // subsequent saves will be an update
+                } else if (inserted?.id) {
+                    messagesRowId = inserted.id as string;
+                    isExistingRow = true;
+                    await linkConversationToTranscriptMessage(supabase, convId as string, messagesRowId);
                 }
             }
         };
 
         // Save the user message (append)
         transcript.push({ role: "user", content: message });
-        await saveTranscript(transcript);
 
-        // Fetch conversation summary for context
-        const { data: conversation } = await supabase
-            .from("conversations")
-            .select("summary")
-            .eq("id", convId)
-            .single();
+        const [conversationSummary, memResult] = await Promise.all([
+            fetchConversationSummaryForContext(supabase, convId as string),
+            supabase.from("user_memory").select("structured_memory").eq("user_id", user.id).maybeSingle(),
+        ]);
 
-        // Fetch User Memory
-        const { data: memoryData } = await supabase
-            .from("user_memory")
-            .select("structured_memory")
-            .eq("user_id", user.id)
-            .maybeSingle();
-        
-        const memoryContent = memoryData?.structured_memory ? 
-            JSON.stringify(memoryData.structured_memory, null, 2) : "No overarching memory yet.";
+        const { data: memoryData } = memResult;
 
-        // Build context for Gemini
-        const conversationSummary = conversation?.summary || "";
+        const memoryContent = memoryData?.structured_memory
+            ? JSON.stringify(memoryData.structured_memory, null, 2)
+            : "No overarching memory yet.";
         let systemContext = THERAPIST_SYSTEM_PROMPT;
         
         systemContext += `\n\n## Overarching User Memory Profile:\n${memoryContent}`;
@@ -137,23 +134,26 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // Call Gemini API
+        const geminiPayload = JSON.stringify({
+            system_instruction: {
+                parts: [{ text: systemContext }],
+            },
+            contents: geminiContents,
+            generationConfig: {
+                temperature: 0.85,
+                topP: 0.95,
+                topK: 40,
+                maxOutputTokens: 1024,
+            },
+        });
+
+        const saveUserTurn = saveTranscript(transcript);
         const geminiResponse = await fetch(`${GEMINI_API_URL}?key=${process.env.GEMINI_API_KEY}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                system_instruction: {
-                    parts: [{ text: systemContext }],
-                },
-                contents: geminiContents,
-                generationConfig: {
-                    temperature: 0.85,
-                    topP: 0.95,
-                    topK: 40,
-                    maxOutputTokens: 1024,
-                },
-            }),
+            body: geminiPayload,
         });
+        await saveUserTurn;
 
         if (!geminiResponse.ok) {
             const errorText = await geminiResponse.text();
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (transcript.length % 2 === 0) {
-            updateSummaryAndMemory(convId, user.id, transcript, memoryContent, supabase);
+            await updateSummaryAndMemory(messagesRowId, user.id, transcript, memoryContent, supabase);
         }
 
         return Response.json({
@@ -212,89 +212,5 @@ export async function POST(request: NextRequest) {
     } catch (error: any) {
         console.error("Chat API Error:", error.message || error);
         return Response.json({ error: error.message || "Internal server error" }, { status: 500 });
-    }
-}
-
-// Background summary update (non-blocking)
-async function updateSummaryAndMemory(
-    conversationId: string,
-    userId: string,
-    transcript: { role: string; content: string }[],
-    currentMemoryContent: string,
-    supabase: Awaited<ReturnType<typeof createClient>>
-) {
-    try {
-        const recentMessagesText = transcript.slice(-30).map((m) => `${m.role}: ${m.content}`).join("\n");
-
-        // 1. Update the Conversation Summary
-        const summaryResponse = await fetch(`${GEMINI_API_URL}?key=${process.env.GEMINI_API_KEY}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                system_instruction: { parts: [{ text: SUMMARY_PROMPT }] },
-                contents: [{ role: "user", parts: [{ text: `Summarize this therapy conversation:\n\n${recentMessagesText}` }] }],
-                generationConfig: { temperature: 0.3, maxOutputTokens: 300 },
-            }),
-        });
-
-        if (summaryResponse.ok) {
-            const data = await summaryResponse.json();
-            const summary = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            if (summary) {
-                const { error: summaryError } = await supabase.from("conversations").update({ summary }).eq("id", conversationId);
-                if (summaryError) {
-                    console.error("Conversation summary update error:", summaryError);
-                }
-            }
-        }
-
-        // 2. Update the Overarching User Memory Profile
-        const memoryResponse = await fetch(`${GEMINI_API_URL}?key=${process.env.GEMINI_API_KEY}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                system_instruction: { parts: [{ text: MEMORY_UPDATE_PROMPT }] },
-                contents: [
-                    { 
-                        role: "user", 
-                        parts: [{ 
-                            text: `Current Memory Profile:\n${currentMemoryContent}\n\nRecent Conversation snippet:\n${recentMessagesText}\n\nExtract and return the updated structured JSON memory profile.` 
-                        }] 
-                    }
-                ],
-                generationConfig: { 
-                    temperature: 0.1, 
-                    responseMimeType: "application/json" 
-                },
-            }),
-        });
-
-        if (memoryResponse.ok) {
-            const data = await memoryResponse.json();
-            const memoryJsonStr = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            if (memoryJsonStr) {
-                try {
-                    const parsedMemory = JSON.parse(memoryJsonStr);
-                    const { data: memData } = await supabase.from("user_memory").select("user_id").eq("user_id", userId).limit(1);
-                    if (memData && memData.length > 0) {
-                        const { error } = await supabase.from("user_memory").update({
-                            structured_memory: parsedMemory
-                        }).eq("user_id", userId);
-                        if (error) console.error("User memory update error:", error);
-                    } else {
-                        const { error } = await supabase.from("user_memory").insert({
-                            user_id: userId,
-                            structured_memory: parsedMemory
-                        });
-                        if (error) console.error("User memory insert error:", error);
-                    }
-                } catch (e) {
-                    console.error("Failed to parse Gemini JSON output for memory:", memoryJsonStr);
-                }
-            }
-        }
-
-    } catch (error) {
-        console.error("Summary/Memory update error:", error);
     }
 }
