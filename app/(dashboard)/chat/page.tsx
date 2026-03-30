@@ -8,6 +8,7 @@ import { useVoice } from "@/hooks/useVoice";
 import { Send, Mic, MicOff } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { VoiceInteractionOverlay } from "@/components/VoiceInteractionOverlay";
+import { LiveKitConnectPanel, type LiveKitTranscript, type LiveKitPanelHandle } from "@/components/LiveKitConnectPanel";
 
 /** In voice mode while the mic is listening: no interim transcript for this long → exit voice mode. */
 const VOICE_IDLE_EXIT_MS = 10_000;
@@ -41,6 +42,10 @@ export default function ChatPage() {
     const [interim, setInterim] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
     const [conversationId, setConversationId] = useState<string | null>(null);
+    const [livekitRoomId, setLivekitRoomId] = useState<string | null>(null);
+    const [livekitConnected, setLivekitConnected] = useState(false);
+    const [livekitMicOn, setLivekitMicOn] = useState(false);
+    const livekitRef = useRef<LiveKitPanelHandle>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -98,6 +103,26 @@ export default function ChatPage() {
         }
     }, [searchParams]);
 
+    // Create/load a dedicated LiveKit room id when user lands on chat.
+    useEffect(() => {
+        const id = searchParams.get("id");
+        const sessionKey = "livekit_room_current";
+        const convKey = id ? `livekit_room_conv_${id}` : null;
+        const existing =
+            (convKey ? window.localStorage.getItem(convKey) : null) ||
+            window.sessionStorage.getItem(sessionKey);
+        if (existing) {
+            setLivekitRoomId(existing);
+            return;
+        }
+        const generated = `room_${crypto.randomUUID()}`;
+        setLivekitRoomId(generated);
+        window.sessionStorage.setItem(sessionKey, generated);
+        if (convKey) {
+            window.localStorage.setItem(convKey, generated);
+        }
+    }, [searchParams]);
+
     // Auto-scroll to bottom
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -125,6 +150,10 @@ export default function ChatPage() {
             setIsLoadingHistory(false);
         }
     }
+
+    const handleLivekitTranscript = useCallback((msg: LiveKitTranscript) => {
+        setMessages((prev) => [...prev, { role: msg.role, content: msg.content }]);
+    }, []);
 
     async function sendMessage(e?: React.FormEvent) {
         e?.preventDefault();
@@ -172,6 +201,12 @@ export default function ChatPage() {
             if (data.isNewConversation && data.conversationId) {
                 setConversationId(data.conversationId);
                 router.replace(`/chat?id=${data.conversationId}`, { scroll: false });
+                const sessionKey = "livekit_room_current";
+                const convKey = `livekit_room_conv_${data.conversationId}`;
+                if (livekitRoomId) {
+                    window.localStorage.setItem(convKey, livekitRoomId);
+                    window.sessionStorage.setItem(sessionKey, livekitRoomId);
+                }
             }
         } catch (err) {
             console.error("Send error:", err);
@@ -395,6 +430,14 @@ export default function ChatPage() {
     startRecordingRef.current = startRecording;
 
     function handleMicClick() {
+        if (livekitConnected) {
+            void livekitRef.current?.toggleMic();
+            return;
+        }
+        if (!livekitConnected && livekitRef.current) {
+            void livekitRef.current.connect();
+            return;
+        }
         if (isVoiceMode) {
             if (isLoading || isSpeaking) return;
             if (isListening) stopListening();
@@ -439,20 +482,29 @@ export default function ChatPage() {
                     </div>
                     <span className="font-semibold text-white/90">Nova</span>
                 </div>
-                {messages.length > 0 && (
-                    <button 
-                        onClick={() => {
-                            stopSpeaking();
-                            stopListening();
-                            setMessages([]);
-                            setConversationId(null);
-                            router.replace("/chat");
-                        }}
-                        className="text-xs font-medium px-3 py-1.5 rounded-full border border-white/10 text-white/60 hover:text-white hover:bg-white/5 transition-colors"
-                    >
-                        Clear chat
-                    </button>
-                )}
+                <div className="flex items-center gap-3">
+                    <LiveKitConnectPanel
+                        ref={livekitRef}
+                        roomId={livekitRoomId}
+                        onTranscript={handleLivekitTranscript}
+                        onConnectionChange={setLivekitConnected}
+                        onMicChange={setLivekitMicOn}
+                    />
+                    {messages.length > 0 && (
+                        <button
+                            onClick={() => {
+                                stopSpeaking();
+                                stopListening();
+                                setMessages([]);
+                                setConversationId(null);
+                                router.replace("/chat");
+                            }}
+                            className="text-xs font-medium px-3 py-1.5 rounded-full border border-white/10 text-white/60 hover:text-white hover:bg-white/5 transition-colors"
+                        >
+                            Clear chat
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Chat area */}
@@ -493,23 +545,24 @@ export default function ChatPage() {
                     className="w-full max-w-3xl bg-[#1A1A2E]/90 backdrop-blur-2xl rounded-[32px] p-2 flex items-center gap-2 shadow-[0_8px_32px_rgba(0,0,0,0.8)] border border-white/10 pointer-events-auto"
                     onSubmit={sendMessage}
                 >
-                    {/* Mic button */}
+                    {/* Mic button — primary LiveKit voice trigger */}
                     <div className="relative group shrink-0">
                         <button
                             type="button"
                             onClick={handleMicClick}
-                            className={`p-3 rounded-full transition-all ${isListening
-                                ? "bg-red-500/20 text-red-400 animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.2)]"
-                                : isSpeaking
-                                ? "bg-cyan-500/20 text-cyan-400 animate-pulse shadow-[0_0_20px_rgba(34,211,238,0.2)]"
-                                : "hover:bg-white/5 text-white/50 hover:text-white/80"
-                                }`}
-                            disabled={
-                                !isSupported ||
-                                (isVoiceMode && (isLoading || isSpeaking))
-                            }
+                            className={`p-3 rounded-full transition-all ${
+                                livekitConnected && livekitMicOn
+                                    ? "bg-emerald-500/20 text-emerald-400 animate-pulse shadow-[0_0_20px_rgba(52,211,153,0.25)]"
+                                    : livekitConnected && !livekitMicOn
+                                    ? "bg-amber-500/20 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.15)]"
+                                    : isListening
+                                    ? "bg-red-500/20 text-red-400 animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.2)]"
+                                    : isSpeaking
+                                    ? "bg-cyan-500/20 text-cyan-400 animate-pulse shadow-[0_0_20px_rgba(34,211,238,0.2)]"
+                                    : "hover:bg-white/5 text-white/50 hover:text-white/80"
+                            }`}
                         >
-                            {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                            {livekitConnected && !livekitMicOn ? <MicOff size={20} /> : <Mic size={20} />}
                         </button>
                     </div>
 
@@ -517,7 +570,7 @@ export default function ChatPage() {
                         value={interim ? `${input} ${interim}`.trim() : input}
                         onChange={(e) => setInput(e.target.value)}
                         className="flex-1 bg-transparent px-3 py-3 text-sm text-white/90 outline-none placeholder:text-white/30 font-medium"
-                        placeholder={isListening ? "Listening..." : "Tell me what's on your mind..."}
+                        placeholder={livekitConnected ? "Voice active — type or speak..." : isListening ? "Listening..." : "Tell me what's on your mind..."}
                         disabled={isLoading}
                         suppressHydrationWarning={true}
                     />
@@ -536,8 +589,8 @@ export default function ChatPage() {
                 </form>
             </div>
 
-            {/* Voice Interaction Overlay */}
-            {isVoiceMode && (
+            {/* Voice Interaction Overlay (only when NOT using LiveKit) */}
+            {isVoiceMode && !livekitConnected && (
                 <VoiceInteractionOverlay 
                     status={voiceStatus} 
                     onExit={() => {

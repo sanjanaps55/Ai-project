@@ -66,17 +66,46 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const { data: msgData, error: selectError } = await supabase
-            .from("messages")
-            .select("id, conversation_id, transcript")
-            .eq("conversation_id", convId)
-            .limit(1);
-
-        if (selectError) {
-            console.error("Select transcript error:", selectError);
+        // Fetch message row using conversations.message_id as source of truth.
+        const { data: convRow, error: convLookupError } = await supabase
+            .from("conversations")
+            .select("message_id")
+            .eq("id", convId)
+            .maybeSingle();
+        if (convLookupError) {
+            console.error("Conversation message_id lookup error:", convLookupError);
         }
 
-        const existingRow = msgData && msgData.length > 0 ? msgData[0] : null;
+        let existingRow: { id: string; conversation_id: string; transcript: { role: string; content: string }[] | null } | null =
+            null;
+
+        if (convRow?.message_id) {
+            const { data: byId, error: byIdError } = await supabase
+                .from("messages")
+                .select("id, conversation_id, transcript")
+                .eq("id", convRow.message_id)
+                .maybeSingle();
+            if (byIdError) {
+                console.error("Select transcript by message_id error:", byIdError);
+            }
+            existingRow = (byId as typeof existingRow) ?? null;
+        } else {
+            // Fallback for old data before message_id backfill.
+            const { data: byConversation, error: byConversationError } = await supabase
+                .from("messages")
+                .select("id, conversation_id, transcript")
+                .eq("conversation_id", convId)
+                .limit(1)
+                .maybeSingle();
+            if (byConversationError) {
+                console.error("Select transcript by conversation_id error:", byConversationError);
+            }
+            existingRow = (byConversation as typeof existingRow) ?? null;
+            if (existingRow?.id) {
+                await linkConversationToMessage(supabase, convId as string, existingRow.id);
+            }
+        }
+
         let transcript: { role: string; content: string }[] =
             (existingRow?.transcript as { role: string; content: string }[]) || [];
         let isExistingRow = !!existingRow;
