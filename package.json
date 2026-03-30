@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check-elevenlabs": "node scripts/check-elevenlabs.mjs"
+    "check-elevenlabs": "node scripts/check-elevenlabs.mjs",
+    "db:push": "node scripts/db-push.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.76.0",

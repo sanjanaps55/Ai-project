@@ -10,42 +10,29 @@ export async function fetchConversationSummaryForContext(
 ): Promise<string> {
     const { data: conv } = await supabase
         .from("conversations")
-        .select("transcript_message_id")
+        .select("summary")
         .eq("id", conversationId)
         .single();
 
-    const msgId = conv?.transcript_message_id as string | null | undefined;
-    if (msgId) {
-        const { data: row } = await supabase.from("messages").select("summary").eq("id", msgId).single();
-        return (row?.summary as string) || "";
-    }
-
-    const { data: fallback } = await supabase
-        .from("messages")
-        .select("summary")
-        .eq("conversation_id", conversationId)
-        .limit(1)
-        .maybeSingle();
-
-    return (fallback?.summary as string) || "";
+    return (conv?.summary as string) || "";
 }
 
-export async function linkConversationToTranscriptMessage(
+export async function linkConversationToMessage(
     supabase: Awaited<ReturnType<typeof createClient>>,
     conversationId: string,
     messagesRowId: string
 ): Promise<void> {
     const { error } = await supabase
         .from("conversations")
-        .update({ transcript_message_id: messagesRowId })
+        .update({ message_id: messagesRowId })
         .eq("id", conversationId);
     if (error) {
-        console.error("linkConversationToTranscriptMessage error:", error);
+        console.error("linkConversationToMessage error:", error);
     }
 }
 
 export async function updateSummaryAndMemory(
-    messagesRowId: string | null,
+    conversationId: string,
     userId: string,
     transcript: { role: string; content: string }[],
     currentMemoryContent: string,
@@ -74,13 +61,13 @@ export async function updateSummaryAndMemory(
         if (summaryResponse.ok) {
             const data = await summaryResponse.json();
             const summary = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            if (summary && messagesRowId) {
+            if (summary) {
                 const { error: summaryError } = await supabase
-                    .from("messages")
+                    .from("conversations")
                     .update({ summary })
-                    .eq("id", messagesRowId);
+                    .eq("id", conversationId);
                 if (summaryError) {
-                    console.error("messages.summary update error:", summaryError);
+                    console.error("conversations.summary update error:", summaryError);
                 }
             }
         }

@@ -2,7 +2,7 @@ import { createClient } from "@/utils/supabase/server";
 import { THERAPIST_SYSTEM_PROMPT, buildConversationTitle } from "@/utils/therapist-prompt";
 import {
     fetchConversationSummaryForContext,
-    linkConversationToTranscriptMessage,
+    linkConversationToMessage,
     updateSummaryAndMemory,
 } from "@/app/api/chat/summary-memory";
 import { readGeminiTextStream } from "@/utils/gemini-stream";
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
                 else if (inserted?.id) {
                     messagesRowId = inserted.id as string;
                     isExistingRow = true;
-                    await linkConversationToTranscriptMessage(supabase, convId as string, messagesRowId);
+                    await linkConversationToMessage(supabase, convId as string, messagesRowId);
                 }
             }
         };
@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
 
                     if (transcript.length % 2 === 0) {
                         await updateSummaryAndMemory(
-                            messagesRowId,
+                            conversationIdStr,
                             user.id,
                             transcript,
                             memoryContent,

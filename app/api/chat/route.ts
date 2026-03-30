@@ -2,7 +2,7 @@ import { createClient } from "@/utils/supabase/server";
 import { THERAPIST_SYSTEM_PROMPT, buildConversationTitle } from "@/utils/therapist-prompt";
 import {
     fetchConversationSummaryForContext,
-    linkConversationToTranscriptMessage,
+    linkConversationToMessage,
     updateSummaryAndMemory,
 } from "@/app/api/chat/summary-memory";
 import { NextRequest } from "next/server";
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
                 } else if (inserted?.id) {
                     messagesRowId = inserted.id as string;
                     isExistingRow = true;
-                    await linkConversationToTranscriptMessage(supabase, convId as string, messagesRowId);
+                    await linkConversationToMessage(supabase, convId as string, messagesRowId);
                 }
             }
         };
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (transcript.length % 2 === 0) {
-            await updateSummaryAndMemory(messagesRowId, user.id, transcript, memoryContent, supabase);
+            await updateSummaryAndMemory(convId as string, user.id, transcript, memoryContent, supabase);
         }
 
         return Response.json({
