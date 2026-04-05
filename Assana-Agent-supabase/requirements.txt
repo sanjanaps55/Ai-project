@@ -1,3 +1,7 @@
-livekit-agents[google]~=1.5
+livekit-agents
+livekit-plugins-deepgram
+livekit-plugins-google
+livekit-plugins-elevenlabs
+livekit-plugins-silero
 python-dotenv>=1.0.0
 supabase>=2.3.0
