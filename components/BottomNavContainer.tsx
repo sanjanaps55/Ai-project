@@ -8,10 +8,9 @@ export const BottomNavContainer = () => {
 
     const isDashboardRoute =
         pathname?.startsWith("/chat") ||
-        pathname?.startsWith("/explore") ||
-        pathname?.startsWith("/path") ||
-        pathname?.startsWith("/activities") ||
-        pathname?.startsWith("/history");
+        pathname?.startsWith("/history") ||
+        pathname?.startsWith("/insights") ||
+        pathname?.startsWith("/music");
 
     if (!isDashboardRoute) {
         return null;

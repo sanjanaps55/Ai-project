@@ -5,10 +5,9 @@ import { usePathname } from "next/navigation";
 
 const NAV_LINKS = [
   { name: "Chat", path: "/chat", icon: "💬" },
-  { name: "Explore", path: "/explore", icon: "🧭" },
-  { name: "Path", path: "/path", icon: "✨" },
-  { name: "Activities", path: "/activities", icon: "🧘" },
   { name: "History", path: "/history", icon: "📖" },
+  { name: "Insights", path: "/insights", icon: "📊" },
+  { name: "Music", path: "/music", icon: "🎵" },
 ];
 
 export const BottomNav = () => {

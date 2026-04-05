@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:docs.livekit.io)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(python -c \"from livekit.plugins import elevenlabs; help\\(elevenlabs.STT.__init__\\)\")"
+    ]
+  }
+}

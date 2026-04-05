@@ -23,6 +23,7 @@ export async function GET(request: Request) {
     room,
     canPublish: true,
     canSubscribe: true,
+    canPublishData: true,
   });
 
   const token = await at.toJwt();
