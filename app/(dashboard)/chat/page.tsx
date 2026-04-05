@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { ChatBubble } from "@/components/ChatBubble";
 import { TypingIndicator } from "@/components/TypingIndicator";
@@ -30,7 +30,7 @@ function mergeAdjacentUserMessagesForDisplay(messages: Message[]): Message[] {
     return out;
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<Message[]>([]);
     const [conversationId, setConversationId] = useState<string | null>(null);
@@ -364,5 +364,17 @@ export default function ChatPage() {
             </div>
 
         </div>
+    );
+}
+
+export default function ChatPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex items-center justify-center h-full w-full">
+                <div className="text-white/30 text-sm animate-pulse">Initializing chat...</div>
+            </div>
+        }>
+            <ChatPageContent />
+        </Suspense>
     );
 }
