@@ -19,6 +19,7 @@ export default function LoginPage() {
     )
 
     const errorMessage = loginState?.error || signupState?.error
+    const signupInfoMessage = signupState?.message
 
     return (
         <div className="flex min-h-screen flex-col items-center justify-center p-24">
@@ -33,6 +34,12 @@ export default function LoginPage() {
                         {errorMessage.includes("Invalid login credentials") 
                             ? "Invalid credentials. If you don't have an account, please sign up." 
                             : errorMessage}
+                    </div>
+                )}
+
+                {signupInfoMessage && !errorMessage && (
+                    <div className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 p-4 text-sm text-indigo-200 animate-in fade-in slide-in-from-top-1">
+                        {signupInfoMessage}
                     </div>
                 )}
 

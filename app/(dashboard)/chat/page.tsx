@@ -50,13 +50,29 @@ function ChatPageContent() {
         [messages]
     );
 
-    // Fetch Supabase user ID for LiveKit identity
+    // Supabase user ID for LiveKit + RLS-backed APIs (session may arrive right after redirect)
     useEffect(() => {
         const supabase = createClient();
+
+        function applyUserFromSession(user: { id: string } | null) {
+            if (user?.id) setUserId(user.id);
+        }
+
         supabase.auth.getUser().then(({ data }) => {
-            if (data?.user?.id) setUserId(data.user.id);
+            applyUserFromSession(data.user ?? null);
         });
-    }, []);
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((event, session) => {
+            applyUserFromSession(session?.user ?? null);
+            if (event === "SIGNED_IN") {
+                router.refresh();
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, [router]);
 
 
 

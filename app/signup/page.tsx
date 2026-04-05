@@ -13,6 +13,7 @@ export default function SignupPage() {
     )
 
     const errorMessage = signupState?.error
+    const infoMessage = signupState?.message
     return (
         <div className="flex min-h-screen flex-col items-center justify-center p-24">
             <div className="w-full max-w-md space-y-8 rounded-xl border border-white/10 bg-white/5 p-8 backdrop-blur-lg">
@@ -24,6 +25,12 @@ export default function SignupPage() {
                 {errorMessage && (
                     <div className="rounded-lg bg-red-500/10 border border-red-500/50 p-4 text-sm text-red-400 animate-in fade-in slide-in-from-top-1">
                         {errorMessage}
+                    </div>
+                )}
+
+                {infoMessage && !errorMessage && (
+                    <div className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 p-4 text-sm text-indigo-200 animate-in fade-in slide-in-from-top-1">
+                        {infoMessage}
                     </div>
                 )}
 

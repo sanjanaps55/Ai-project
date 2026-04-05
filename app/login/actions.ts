@@ -26,15 +26,23 @@ export async function login(formData: FormData) {
 export async function signup(formData: FormData) {
     const supabase = await createClient()
 
-    const data = {
+    const credentials = {
         email: formData.get('email') as string,
         password: formData.get('password') as string,
     }
 
-    const { error } = await supabase.auth.signUp(data)
+    const { data, error } = await supabase.auth.signUp(credentials)
 
     if (error) {
         return { error: error.message }
+    }
+
+    // Email confirmation enabled in Supabase → user exists but no session yet
+    if (!data.session) {
+        return {
+            message:
+                'Check your email for a confirmation link. After you confirm, log in to continue.',
+        }
     }
 
     revalidatePath('/', 'layout')
@@ -51,7 +59,14 @@ export async function signout() {
 export async function signInWithGoogle() {
     const supabase = await createClient()
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const siteUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        (process.env.VERCEL_PROJECT_PRODUCTION_URL
+            ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+            : null) ||
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+        'http://localhost:3000'
+
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

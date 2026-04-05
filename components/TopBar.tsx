@@ -15,13 +15,25 @@ export const TopBar = ({ onMenuClick }: { onMenuClick?: () => void }) => {
 
     useEffect(() => {
         const supabase = createClient();
+
+        function applyUser(user: NonNullable<Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"]> | null) {
+            if (!user) return;
+            setAvatarUrl(user.user_metadata?.avatar_url || null);
+            const fullName = user.user_metadata?.full_name || user.email?.split("@")[0] || "User";
+            setUserName(fullName.split(" ")[0]);
+        }
+
         supabase.auth.getUser().then(({ data: { user } }) => {
-            if (user) {
-                setAvatarUrl(user.user_metadata?.avatar_url || null);
-                const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || "User";
-                setUserName(fullName.split(' ')[0]);
-            }
+            applyUser(user);
         });
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+            applyUser(session?.user ?? null);
+        });
+
+        return () => subscription.unsubscribe();
     }, []);
 
     return (
