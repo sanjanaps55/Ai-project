@@ -1,6 +1,25 @@
+"use client"
+
+import { useActionState } from 'react'
 import { login, signup, signInWithGoogle } from './actions'
 
 export default function LoginPage() {
+    const [loginState, loginAction, isLoginPending] = useActionState(
+        async (prevState: any, formData: FormData) => {
+            return await login(formData)
+        },
+        null
+    )
+
+    const [signupState, signupAction, isSignupPending] = useActionState(
+        async (prevState: any, formData: FormData) => {
+            return await signup(formData)
+        },
+        null
+    )
+
+    const errorMessage = loginState?.error || signupState?.error
+
     return (
         <div className="flex min-h-screen flex-col items-center justify-center p-24">
             <div className="w-full max-w-md space-y-8 rounded-xl border border-white/10 bg-white/5 p-8 backdrop-blur-lg">
@@ -8,6 +27,14 @@ export default function LoginPage() {
                     <h1 className="text-3xl font-bold text-white">Welcome Back</h1>
                     <p className="mt-2 text-white/60">Log in to your account or sign up to get started.</p>
                 </div>
+
+                {errorMessage && (
+                    <div className="rounded-lg bg-red-500/10 border border-red-500/50 p-4 text-sm text-red-400 animate-in fade-in slide-in-from-top-1">
+                        {errorMessage.includes("Invalid login credentials") 
+                            ? "Invalid credentials. If you don't have an account, please sign up." 
+                            : errorMessage}
+                    </div>
+                )}
 
                 <form className="mt-8 space-y-6">
                     <div className="space-y-4 rounded-md shadow-sm">
@@ -43,16 +70,18 @@ export default function LoginPage() {
 
                     <div className="flex gap-4">
                         <button
-                            formAction={login}
-                            className="flex-1 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500"
+                            formAction={loginAction}
+                            disabled={isLoginPending || isSignupPending}
+                            className="flex-1 rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Log in
+                            {isLoginPending ? "Logging in..." : "Log in"}
                         </button>
                         <button
-                            formAction={signup}
-                            className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                            formAction={signupAction}
+                            disabled={isLoginPending || isSignupPending}
+                            className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition-all hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Sign up
+                            {isSignupPending ? "Signing up..." : "Sign up"}
                         </button>
                     </div>
 

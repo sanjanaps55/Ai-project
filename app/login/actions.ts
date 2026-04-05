@@ -16,7 +16,7 @@ export async function login(formData: FormData) {
     const { error } = await supabase.auth.signInWithPassword(data)
 
     if (error) {
-        redirect('/error')
+        return { error: error.message }
     }
 
     revalidatePath('/', 'layout')
@@ -34,7 +34,7 @@ export async function signup(formData: FormData) {
     const { error } = await supabase.auth.signUp(data)
 
     if (error) {
-        redirect('/error')
+        return { error: error.message }
     }
 
     revalidatePath('/', 'layout')
@@ -51,10 +51,11 @@ export async function signout() {
 export async function signInWithGoogle() {
     const supabase = await createClient()
 
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
     const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-            redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/callback`,
+            redirectTo: `${siteUrl}/auth/callback`,
         },
     })
 
