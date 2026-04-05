@@ -4,6 +4,8 @@ import "./globals.css";
 import { APP_NAME, TAGLINE } from "@/constants";
 import { BottomNavContainer } from "@/components/BottomNavContainer";
 
+// Nova - AI therapist with RAG memory and mood-responsive music therapy
+
 const inter = Inter({
   variable: "--font-inter",
   subsets: ["latin"],
