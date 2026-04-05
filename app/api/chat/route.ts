@@ -71,8 +71,13 @@ export async function POST(request: NextRequest) {
             console.error("Conversation message_id lookup error:", convLookupError);
         }
 
-        let existingRow: { id: string; conversation_id: string; transcript: { role: string; content: string }[] | null } | null =
-            null;
+        interface MessageRecord {
+            id: string;
+            conversation_id: string;
+            transcript: { role: string; content: string }[] | null;
+        }
+
+        let existingRow: MessageRecord | null = null;
 
         if (convRow?.message_id) {
             const { data: byId, error: byIdError } = await supabase
@@ -83,7 +88,7 @@ export async function POST(request: NextRequest) {
             if (byIdError) {
                 console.error("Select transcript by message_id error:", byIdError);
             }
-            existingRow = (byId as typeof existingRow) ?? null;
+            existingRow = (byId as MessageRecord) ?? null;
         } else {
             // Fallback for old data before message_id backfill.
             const { data: byConversation, error: byConversationError } = await supabase
@@ -95,7 +100,7 @@ export async function POST(request: NextRequest) {
             if (byConversationError) {
                 console.error("Select transcript by conversation_id error:", byConversationError);
             }
-            existingRow = (byConversation as typeof existingRow) ?? null;
+            existingRow = (byConversation as MessageRecord) ?? null;
             if (existingRow?.id) {
                 await linkConversationToMessage(supabase, convId as string, existingRow.id);
             }
