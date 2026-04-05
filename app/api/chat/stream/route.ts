@@ -7,41 +7,20 @@ import {
 } from "@/app/api/chat/summary-memory";
 import { readGeminiTextStream } from "@/utils/gemini-stream";
 import { NextRequest } from "next/server";
+import {
+    getEmbedding,
+    ingestUserMessageIntoRagBuffer,
+    flushRagBufferTailAfterTurn,
+} from "@/app/api/chat/rag-buffer";
 
 const GEMINI_STREAM_URL =
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent";
-const GEMINI_EMBED_URL = 
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2-preview:embedContent";
 const MESSAGE_CONTEXT_LIMIT = 30;
 
 interface MessageRecord {
     id: string;
     conversation_id: string;
     transcript: { role: string; content: string }[] | null;
-}
-
-async function getEmbedding(text: string, apiKey: string) {
-    try {
-        const response = await fetch(`${GEMINI_EMBED_URL}?key=${apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                model: "models/gemini-embedding-2-preview",
-                content: { parts: [{ text }] },
-                output_dimensionality: 768
-            })
-        });
-        if (!response.ok) {
-            const errText = await response.text();
-            console.error("Gemini Embedding API Error:", response.status, errText);
-            return null;
-        }
-        const data = await response.json();
-        return data.embedding?.values || null;
-    } catch (e) {
-        console.error("Embedding generation error:", e);
-        return null;
-    }
 }
 
 /** NDJSON lines: meta, t (delta), done | error */
@@ -179,18 +158,29 @@ export async function POST(request: NextRequest) {
 
         let retrievedContext = "";
         try {
-            const queryEmbedding = await getEmbedding(message, apiKey);
+            const queryEmbedding = await getEmbedding(message, apiKey, "RETRIEVAL_QUERY");
             if (queryEmbedding) {
                 const { data: matches, error: matchError } = await supabase.rpc("match_messages", {
                     query_embedding: queryEmbedding,
-                    match_threshold: 0.65,
-                    match_count: 5,
-                    p_user_id: user.id
+                    match_threshold: 0.5,
+                    match_count: 8,
+                    p_user_id: user.id,
                 });
-                
-                if (!matchError && matches && matches.length > 0) {
-                    retrievedContext = matches.map((m: any) => m.content).join("\n\n---\n\n");
-                    console.log("\n🧠 RAG RETRIEVAL: Injected past memory into AI prompt context:\n", retrievedContext, "\n");
+
+                if (matchError) {
+                    console.error("RAG match_messages RPC error:", matchError.message, matchError);
+                } else if (matches && matches.length > 0) {
+                    retrievedContext = matches.map((m: { content: string }) => m.content).join("\n\n---\n\n");
+                    console.log(
+                        "\n🧠 RAG RETRIEVAL:",
+                        matches.length,
+                        "chunks injected into prompt context\n",
+                        retrievedContext.slice(0, 800),
+                        retrievedContext.length > 800 ? "…" : "",
+                        "\n"
+                    );
+                } else {
+                    console.log("🧠 RAG: no rows above threshold (embeddings empty or low similarity)");
                 }
             }
         } catch (e) {
@@ -202,7 +192,10 @@ export async function POST(request: NextRequest) {
             supabase.from("user_memory").select("structured_memory").eq("user_id", user.id).maybeSingle(),
         ]);
 
-        const { data: memoryData } = memResult;
+        const { data: memoryData, error: memorySelectError } = memResult;
+        if (memorySelectError) {
+            console.error("user_memory select error:", memorySelectError.message, memorySelectError);
+        }
 
         const memoryContent = memoryData?.structured_memory
             ? JSON.stringify(memoryData.structured_memory, null, 2)
@@ -244,26 +237,9 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        const saveEmbedding = async () => {
-             const embedding = await getEmbedding(message, apiKey);
-             if (embedding && convId) {
-                 const { error } = await supabase.from("message_embeddings").insert({
-                     conversation_id: convId,
-                     user_id: user.id,
-                     content: message,
-                     embedding: embedding
-                 });
-                 if (error) {
-                     console.error("🔴 DATABASE INSERT ERROR (message_embeddings):", error);
-                 } else {
-                     console.log("🟢 SUCCESS: Vector embedding saved to database for message:", message);
-                 }
-             } else {
-                 console.error("🔴 FAILED TO GENERATE EMBEDDING FROM GEMINI.");
-             }
-        };
-
-        const saveUserTurn = saveTranscript(transcript).then(saveEmbedding);
+        const saveUserTurn = saveTranscript(transcript).then(() =>
+            ingestUserMessageIntoRagBuffer(supabase, convId as string, user.id, message, apiKey)
+        );
         let geminiResponse: Response;
         try {
             geminiResponse = await fetch(streamUrl, {
@@ -339,6 +315,13 @@ export async function POST(request: NextRequest) {
                             supabase
                         );
                     }
+
+                    await flushRagBufferTailAfterTurn(
+                        supabase,
+                        conversationIdStr,
+                        user.id,
+                        apiKey
+                    );
 
                     send({ type: "done", full: aiResponse });
                 } catch (e) {

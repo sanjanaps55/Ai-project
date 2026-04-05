@@ -15,6 +15,10 @@ interface SpotifyPlaylist {
 interface MusicResponse {
     dominantEmotion: string;
     searchQuery: string;
+    /** Multiple Spotify searches merged for richer results */
+    searchQueries?: string[];
+    /** Short personalized line from AI or fallback copy */
+    personalizationNote?: string;
     playlists: SpotifyPlaylist[];
     error?: string;
 }
@@ -87,8 +91,13 @@ export default function MusicTherapyPage() {
                                 Recent Mood: {data.dominantEmotion === "neutral" ? "Balanced" : data.dominantEmotion}
                             </h3>
                             <p className="text-white/70 leading-relaxed text-sm">
-                                {theme.text}
+                                {data.personalizationNote || theme.text}
                             </p>
+                            {data.searchQueries && data.searchQueries.length > 1 && (
+                                <p className="text-white/40 text-xs mt-2">
+                                    Blended searches: {data.searchQueries.join(" · ")}
+                                </p>
+                            )}
                         </div>
                     </div>
 
