@@ -28,7 +28,6 @@ COPY requirements.txt .
 RUN python -m pip install --user --no-cache-dir -r requirements.txt
 
 COPY main.py .
-COPY .env .
 
 EXPOSE 8081
 
