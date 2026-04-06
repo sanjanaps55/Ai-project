@@ -30,6 +30,7 @@ export const LiveKitConnectPanel = forwardRef<LiveKitPanelHandle, Props>(
         const [error, setError] = useState<string | null>(null);
         const [micEnabled, setMicEnabled] = useState(false);
         const [audioBlocked, setAudioBlocked] = useState(false);
+        const [agentPresent, setAgentPresent] = useState(false);
 
         const onTranscriptRef = useRef(onTranscript);
         onTranscriptRef.current = onTranscript;
@@ -46,6 +47,7 @@ export const LiveKitConnectPanel = forwardRef<LiveKitPanelHandle, Props>(
                 setStatus("connecting");
                 setError(null);
                 setAudioBlocked(false);
+                setAgentPresent(false);
                 seenSegments.current.clear();
 
                 const q = new URLSearchParams({
@@ -70,6 +72,7 @@ export const LiveKitConnectPanel = forwardRef<LiveKitPanelHandle, Props>(
                     setStatus("idle");
                     setMicEnabled(false);
                     setAudioBlocked(false);
+                    setAgentPresent(false);
                     onMicChangeRef.current?.(false);
                     onConnectionChangeRef.current?.(false);
                     // Clean up attached audio elements
@@ -78,11 +81,22 @@ export const LiveKitConnectPanel = forwardRef<LiveKitPanelHandle, Props>(
                     }
                 });
 
+                lkRoom.on(RoomEvent.ParticipantConnected, (participant) => {
+                    const identity = String(participant.identity ?? "").toLowerCase();
+                    if (identity.includes("nova") || identity.includes("agent")) {
+                        setAgentPresent(true);
+                    }
+                });
+
                 // Attach agent audio tracks to DOM <audio> elements for playback
                 lkRoom.on(
                     RoomEvent.TrackSubscribed,
                     (track, _pub: RemoteTrackPublication, participant: RemoteParticipant) => {
                         if (track.kind === Track.Kind.Audio) {
+                            const identity = String(participant.identity ?? "").toLowerCase();
+                            if (identity.includes("nova") || identity.includes("agent")) {
+                                setAgentPresent(true);
+                            }
                             const el = track.attach();
                             el.setAttribute("autoplay", "true");
                             // Some browsers need volume set explicitly
@@ -196,6 +210,11 @@ export const LiveKitConnectPanel = forwardRef<LiveKitPanelHandle, Props>(
                     >
                         Tap to hear Nova
                     </button>
+                )}
+                {status === "connected" && !agentPresent && (
+                    <span className="text-amber-300/90">
+                        Waiting for Nova agent...
+                    </span>
                 )}
                 <span
                     className={`${
