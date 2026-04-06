@@ -21,6 +21,8 @@ export const RAG_CHUNK_MAX_MSGS = 5;
 export const RAG_TAIL_MIN_CHARS = 72;
 /** …or at least this many user messages in the buffer. */
 export const RAG_TAIL_MIN_MSGS = 2;
+/** Storage strategy: "message" is most reliable for recall; "chunk" is cheaper. */
+const RAG_STORE_MODE = (process.env.NOVA_RAG_STORE_MODE || "message").toLowerCase();
 
 /**
  * Short but identity-heavy facts should be embedded immediately at turn end,
@@ -139,6 +141,29 @@ export async function ingestUserMessageIntoRagBuffer(
     userMessage: string,
     apiKey: string
 ): Promise<void> {
+    // Reliability-first mode: embed every user message immediately.
+    if (RAG_STORE_MODE !== "chunk") {
+        const msg = userMessage.trim();
+        if (!msg) return;
+
+        const embedding = await getEmbedding(msg, apiKey, "RETRIEVAL_DOCUMENT");
+        if (!embedding) return;
+
+        const ok = await insertRagChunk(
+            supabase,
+            conversationId,
+            userId,
+            msg,
+            1,
+            embedding
+        );
+        if (!ok) return;
+
+        // Clear any stale buffered chunk state from prior runs.
+        await clearBuffer(supabase, conversationId);
+        return;
+    }
+
     const { data: row, error: selErr } = await supabase
         .from("conversations")
         .select("memory_rag_buffer, memory_rag_buffer_msgs")
@@ -194,6 +219,10 @@ export async function flushRagBufferTailAfterTurn(
     userId: string,
     apiKey: string
 ): Promise<void> {
+    if (RAG_STORE_MODE !== "chunk") {
+        return;
+    }
+
     const { data: row, error: selErr } = await supabase
         .from("conversations")
         .select("memory_rag_buffer, memory_rag_buffer_msgs")
