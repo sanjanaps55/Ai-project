@@ -22,6 +22,29 @@ export const RAG_TAIL_MIN_CHARS = 72;
 /** …or at least this many user messages in the buffer. */
 export const RAG_TAIL_MIN_MSGS = 2;
 
+/**
+ * Short but identity-heavy facts should be embedded immediately at turn end,
+ * otherwise they can remain buffered and become non-retrievable later.
+ */
+function looksLikePersonalFact(text: string): boolean {
+    const t = text.toLowerCase();
+    return (
+        /\bmy\b/.test(t) &&
+        (
+            /\bname is\b/.test(t) ||
+            /\bi am\b/.test(t) ||
+            /\bi'm\b/.test(t) ||
+            /\bchildhood\b/.test(t) ||
+            /\bdog\b/.test(t) ||
+            /\bcat\b/.test(t) ||
+            /\bpet\b/.test(t) ||
+            /\bfavorite\b/.test(t) ||
+            /\bbirthday\b/.test(t) ||
+            /\bfrom\b/.test(t)
+        )
+    );
+}
+
 export async function getEmbedding(
     text: string,
     apiKey: string,
@@ -187,7 +210,10 @@ export async function flushRagBufferTailAfterTurn(
 
     if (!buf) return;
 
-    const shouldFlush = buf.length >= RAG_TAIL_MIN_CHARS || cnt >= RAG_TAIL_MIN_MSGS;
+    const shouldFlush =
+        buf.length >= RAG_TAIL_MIN_CHARS ||
+        cnt >= RAG_TAIL_MIN_MSGS ||
+        looksLikePersonalFact(buf);
     if (!shouldFlush) {
         return;
     }

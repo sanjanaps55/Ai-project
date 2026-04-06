@@ -51,4 +51,5 @@ export const MEMORY_UPDATE_PROMPT = `You are updating a user memory profile. Giv
   "core_issues": ["e.g. self-doubt", "e.g. academic pressure"],
   "preferences": ["e.g. wants calm reassurance", "e.g. prefers actionable advice"]
 }
+Capture identity details and proper nouns (names of people/pets/places) whenever present, by adding them to relevant arrays.
 Do not omit any field, just leave empty arrays if nothing applies. Return ONLY valid JSON, without markdown formatting like \`\`\`json.`;

@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
             if (queryEmbedding) {
                 const { data: matches, error: matchError } = await supabase.rpc("match_messages", {
                     query_embedding: queryEmbedding,
-                    match_threshold: 0.5,
+                    match_threshold: 0.35,
                     match_count: 8,
                     p_user_id: user.id,
                 });
