@@ -42,7 +42,7 @@ if not os.getenv("GOOGLE_API_KEY") and os.getenv("GEMINI_API_KEY"):
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "EST9Ui6982FZPSi7gCHi")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -66,7 +66,7 @@ if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
         logger.error("Supabase init failed: %s", exc)
 else:
     logger.warning(
-        "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set -- DB persistence disabled"
+        "SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) / SUPABASE_SERVICE_ROLE_KEY not set -- DB persistence disabled"
     )
 
 # ── System prompt ─────────────────────────────────────────────────────────────
