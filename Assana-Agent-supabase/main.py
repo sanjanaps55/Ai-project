@@ -346,12 +346,24 @@ async def entrypoint(ctx: JobContext):
     logger.info("Connected to room: %s", ctx.room.name)
 
     # Identify the human participant (for DB user_id linkage).
+    # In some joins, remote_participants may still be empty right after connect,
+    # so we wait once for a participant before loading memory.
     user_identity: str | None = None
     for p in ctx.room.remote_participants.values():
         ident = getattr(p, "identity", None) or ""
         if ident and not ident.startswith("nova"):
             user_identity = ident
             break
+    if not user_identity:
+        try:
+            participant = await ctx.wait_for_participant()
+            ident = getattr(participant, "identity", None) or ""
+            if ident and not ident.startswith("nova"):
+                user_identity = ident
+        except Exception as exc:
+            logger.warning("Could not resolve participant identity early: %s", exc)
+
+    logger.info("Voice memory identity resolved: %s", user_identity or "<none>")
 
     memory_context = _load_full_voice_memory(user_identity)
 
