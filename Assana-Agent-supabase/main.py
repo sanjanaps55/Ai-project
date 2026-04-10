@@ -181,6 +181,7 @@ def _load_full_voice_memory(user_identity: str | None) -> str:
 
     try:
         sections: list[str] = []
+        structured_obj: dict | None = None
 
         mem_res = (
             db.table("user_memory")
@@ -192,6 +193,8 @@ def _load_full_voice_memory(user_identity: str | None) -> str:
         if mem_res.data and len(mem_res.data) > 0:
             structured = mem_res.data[0].get("structured_memory")
             if structured:
+                if isinstance(structured, dict):
+                    structured_obj = structured
                 sections.append(f"Overarching User Memory Profile:\n{structured}")
 
         conv_res = (
@@ -215,14 +218,21 @@ def _load_full_voice_memory(user_identity: str | None) -> str:
                 + "\n---\n".join(conv_summaries)
             )
 
-        # Build one semantic query seed from known memory; retrieve only similar chunks.
-        query_seed_parts = []
-        if sections:
-            # enough context while keeping query short for embedding
-            joined = "\n".join(sections)
-            query_seed_parts.append(joined[:1200])
-        query_seed = "\n".join(query_seed_parts).strip()
+        # Build focused semantic query seed from key fields (not full blob) for better matches.
+        query_seed_parts: list[str] = []
+        if structured_obj:
+            for key in ("keywords", "recent_events", "core_issues", "preferences"):
+                vals = structured_obj.get(key)
+                if isinstance(vals, list) and vals:
+                    joined_vals = ", ".join(str(v).strip() for v in vals if str(v).strip())
+                    if joined_vals:
+                        query_seed_parts.append(f"{key}: {joined_vals}")
+        if conv_summaries:
+            query_seed_parts.append(f"latest_summary: {conv_summaries[0]}")
+
+        query_seed = "\n".join(query_seed_parts).strip()[:1200]
         query_embedding = _get_embedding_values(query_seed)
+        similar_chunks: list[str] = []
         if query_embedding:
             rpc_res = db.rpc(
                 "match_messages",
@@ -233,17 +243,35 @@ def _load_full_voice_memory(user_identity: str | None) -> str:
                     "p_user_id": user_identity,
                 },
             ).execute()
-            similar_chunks = []
             if rpc_res.data:
                 for row in rpc_res.data:
                     t = str(row.get("content", "")).strip()
                     if t and t not in similar_chunks:
                         similar_chunks.append(t)
-            if similar_chunks:
-                sections.append(
-                    "Relevant Semantic Memories (similar matches):\n"
-                    + "\n---\n".join(similar_chunks)
-                )
+        else:
+            logger.warning("Voice memory: similarity query seed empty or embedding failed")
+
+        # Fallback: include a few most-recent semantic chunks if similarity returns nothing.
+        if not similar_chunks:
+            recent_res = (
+                db.table("message_embeddings")
+                .select("content, created_at")
+                .eq("user_id", user_identity)
+                .order("created_at", desc=True)
+                .limit(6)
+                .execute()
+            )
+            if recent_res.data:
+                for row in recent_res.data:
+                    t = str(row.get("content", "")).strip()
+                    if t and t not in similar_chunks:
+                        similar_chunks.append(t)
+
+        if similar_chunks:
+            sections.append(
+                "Relevant Semantic Memories (similar matches):\n"
+                + "\n---\n".join(similar_chunks)
+            )
 
         memory_context = "\n\n".join(sections)
         logger.info(
