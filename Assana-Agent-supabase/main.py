@@ -36,6 +36,10 @@ load_dotenv()
 if not os.getenv("ELEVEN_API_KEY") and os.getenv("ELEVENLABS_API_KEY"):
     os.environ["ELEVEN_API_KEY"] = os.environ["ELEVENLABS_API_KEY"]
 
+# LiveKit Google plugin reads GOOGLE_API_KEY; map from GEMINI_API_KEY if needed.
+if not os.getenv("GOOGLE_API_KEY") and os.getenv("GEMINI_API_KEY"):
+    os.environ["GOOGLE_API_KEY"] = os.environ["GEMINI_API_KEY"]
+
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -308,7 +312,7 @@ server = AgentServer()
 async def entrypoint(ctx: JobContext):
     logger.info("Job received — connecting to room …")
     await ctx.connect()
-    logger.info("Connected to room: %s  (sid=%s)", ctx.room.name, ctx.room.sid)
+    logger.info("Connected to room: %s", ctx.room.name)
 
     # Identify the human participant (for DB user_id linkage).
     user_identity: str | None = None
