@@ -137,7 +137,41 @@ function ChatPageContent() {
     }
 
     const handleLivekitTranscript = useCallback((msg: LiveKitTranscript) => {
-        setMessages((prev) => [...prev, { role: msg.role, content: msg.content }]);
+        // Show assistant voice transcript incrementally while speaking.
+        setMessages((prev) => {
+            if (msg.role === "assistant") {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                const isInterim = !msg.isFinal;
+
+                if (isInterim) {
+                    if (last?.role === "assistant" && last.id === "livekit-interim") {
+                        next[next.length - 1] = {
+                            ...last,
+                            content: msg.content,
+                        };
+                    } else {
+                        next.push({
+                            id: "livekit-interim",
+                            role: "assistant",
+                            content: msg.content,
+                        });
+                    }
+                    return next;
+                }
+
+                // Final assistant segment: replace interim bubble if present, else append.
+                if (last?.role === "assistant" && last.id === "livekit-interim") {
+                    next[next.length - 1] = {
+                        role: "assistant",
+                        content: msg.content,
+                    };
+                    return next;
+                }
+            }
+
+            return [...prev, { role: msg.role, content: msg.content }];
+        });
     }, []);
 
     async function sendMessage(e?: React.FormEvent) {

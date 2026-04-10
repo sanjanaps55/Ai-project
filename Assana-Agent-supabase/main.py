@@ -11,6 +11,8 @@ Run locally:
 
 import logging
 import os
+import json
+from urllib import request as urlrequest
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -39,6 +41,7 @@ if not os.getenv("ELEVEN_API_KEY") and os.getenv("ELEVENLABS_API_KEY"):
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "EST9Ui6982FZPSi7gCHi")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -81,8 +84,16 @@ NOVA_SYSTEM_PROMPT = (
 class NovaTherapistAgent(Agent):
     """Voice-first therapist agent backed by Gemini."""
 
-    def __init__(self, chat_ctx: ChatContext):
-        super().__init__(instructions=NOVA_SYSTEM_PROMPT, chat_ctx=chat_ctx)
+    def __init__(self, chat_ctx: ChatContext, memory_context: str = ""):
+        instructions = NOVA_SYSTEM_PROMPT
+        if memory_context:
+            instructions += (
+                "\n\nLong-term memory for this user:\n"
+                f"{memory_context}\n\n"
+                "Use this memory naturally when relevant. "
+                "If the user asks what you remember, answer using these details."
+            )
+        super().__init__(instructions=instructions, chat_ctx=chat_ctx)
 
 
 # ── Helpers: transcript persistence ───────────────────────────────────────────
@@ -125,6 +136,122 @@ def _extract_transcript(session: AgentSession) -> list[dict]:
 
 def _is_valid_uuid(value: str) -> bool:
     return len(value) == 36 and value.count("-") == 4
+
+
+def _get_embedding_values(text: str) -> list[float] | None:
+    if not GEMINI_API_KEY or not text.strip():
+        return None
+    try:
+        payload = {
+            "model": "models/gemini-embedding-2-preview",
+            "content": {"parts": [{"text": text}]},
+            "outputDimensionality": 768,
+            "taskType": "RETRIEVAL_QUERY",
+        }
+        req = urlrequest.Request(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2-preview:embedContent?key={GEMINI_API_KEY}",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlrequest.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        values = data.get("embedding", {}).get("values")
+        if isinstance(values, list) and len(values) == 768:
+            return values
+        return None
+    except Exception as exc:
+        logger.warning("Embedding query failed for voice memory: %s", exc)
+        return None
+
+
+def _load_full_voice_memory(user_identity: str | None) -> str:
+    """
+    Pull voice memory with:
+    1) full user_memory.structured_memory
+    2) conversation summaries as-is
+    3) only semantically similar RAG snippets (not entire embeddings table)
+    """
+    if not db or not user_identity or not _is_valid_uuid(user_identity):
+        return ""
+
+    try:
+        sections: list[str] = []
+
+        mem_res = (
+            db.table("user_memory")
+            .select("structured_memory")
+            .eq("user_id", user_identity)
+            .limit(1)
+            .execute()
+        )
+        if mem_res.data and len(mem_res.data) > 0:
+            structured = mem_res.data[0].get("structured_memory")
+            if structured:
+                sections.append(f"Overarching User Memory Profile:\n{structured}")
+
+        conv_res = (
+            db.table("conversations")
+            .select("summary, updated_at")
+            .eq("user_id", user_identity)
+            .not_.is_("summary", "null")
+            .order("updated_at", desc=True)
+            .limit(12)
+            .execute()
+        )
+        conv_summaries = []
+        if conv_res.data:
+            for row in conv_res.data:
+                s = str(row.get("summary", "")).strip()
+                if s:
+                    conv_summaries.append(s)
+        if conv_summaries:
+            sections.append(
+                "Conversation Memory (summaries):\n"
+                + "\n---\n".join(conv_summaries)
+            )
+
+        # Build one semantic query seed from known memory; retrieve only similar chunks.
+        query_seed_parts = []
+        if sections:
+            # enough context while keeping query short for embedding
+            joined = "\n".join(sections)
+            query_seed_parts.append(joined[:1200])
+        query_seed = "\n".join(query_seed_parts).strip()
+        query_embedding = _get_embedding_values(query_seed)
+        if query_embedding:
+            rpc_res = db.rpc(
+                "match_messages",
+                {
+                    "query_embedding": query_embedding,
+                    "match_threshold": 0.2,
+                    "match_count": 12,
+                    "p_user_id": user_identity,
+                },
+            ).execute()
+            similar_chunks = []
+            if rpc_res.data:
+                for row in rpc_res.data:
+                    t = str(row.get("content", "")).strip()
+                    if t and t not in similar_chunks:
+                        similar_chunks.append(t)
+            if similar_chunks:
+                sections.append(
+                    "Relevant Semantic Memories (similar matches):\n"
+                    + "\n---\n".join(similar_chunks)
+                )
+
+        memory_context = "\n\n".join(sections)
+        logger.info(
+            "Voice memory loaded for user=%s (sections=%d, chars=%d)",
+            user_identity,
+            len(sections),
+            len(memory_context),
+        )
+        return memory_context
+    except Exception as exc:
+        logger.error("Failed loading voice memory context: %s", exc)
+        return ""
 
 
 async def _persist_transcript(
@@ -183,8 +310,18 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect()
     logger.info("Connected to room: %s  (sid=%s)", ctx.room.name, ctx.room.sid)
 
+    # Identify the human participant (for DB user_id linkage).
+    user_identity: str | None = None
+    for p in ctx.room.remote_participants.values():
+        ident = getattr(p, "identity", None) or ""
+        if ident and not ident.startswith("nova"):
+            user_identity = ident
+            break
+
+    memory_context = _load_full_voice_memory(user_identity)
+
     chat_ctx = ChatContext()
-    agent = NovaTherapistAgent(chat_ctx=chat_ctx)
+    agent = NovaTherapistAgent(chat_ctx=chat_ctx, memory_context=memory_context)
 
     session = AgentSession(
         stt=deepgram.STT(),
@@ -193,14 +330,6 @@ async def entrypoint(ctx: JobContext):
         vad=silero.VAD.load(),
         userdata={},
     )
-
-    # Identify the human participant (for DB user_id linkage).
-    user_identity: str | None = None
-    for p in ctx.room.remote_participants.values():
-        ident = getattr(p, "identity", None) or ""
-        if ident and not ident.startswith("nova"):
-            user_identity = ident
-            break
 
     async def on_shutdown():
         transcript = _extract_transcript(session)
@@ -214,12 +343,11 @@ async def entrypoint(ctx: JobContext):
         room_input_options=RoomInputOptions(),
     )
 
-    await session.generate_reply(
-        instructions=(
-            "Greet the user warmly. Say something like: "
-            "'Hi, I'm Nova. How are you feeling today?'"
-        )
-    )
+    try:
+        # Deterministic startup line: no LLM dependency for the first greeting.
+        await session.say("Hi, I'm Nova. How can I help you today?")
+    except RuntimeError as exc:
+        logger.warning("Skipping initial greeting: %s", exc)
     logger.info("Nova therapist agent is running in room %s", ctx.room.name)
 
 

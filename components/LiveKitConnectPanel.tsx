@@ -6,6 +6,8 @@ import { Room, RoomEvent, Track, RemoteTrackPublication, RemoteParticipant } fro
 export type LiveKitTranscript = {
     role: "user" | "assistant";
     content: string;
+    isFinal?: boolean;
+    segmentId?: string;
 };
 
 export type LiveKitPanelHandle = {
@@ -97,20 +99,30 @@ export const LiveKitConnectPanel = forwardRef<LiveKitPanelHandle, Props>(
                             if (identity.includes("nova") || identity.includes("agent")) {
                                 setAgentPresent(true);
                             }
-                            const el = track.attach();
+                            const el = track.attach() as HTMLAudioElement;
                             el.setAttribute("autoplay", "true");
+                            el.setAttribute("playsinline", "true");
+                            el.preload = "auto";
                             // Some browsers need volume set explicitly
                             el.volume = 1;
+                            // Avoid display:none on playable audio nodes in some browsers.
+                            el.style.position = "absolute";
+                            el.style.width = "0";
+                            el.style.height = "0";
+                            el.style.opacity = "0";
+                            el.style.pointerEvents = "none";
                             audioContainerRef.current?.appendChild(el);
 
-                            // Check if audio is actually playing or blocked
-                            const playPromise = el.play();
-                            if (playPromise) {
-                                playPromise.catch(() => {
-                                    // Autoplay blocked — show unlock button
-                                    setAudioBlocked(true);
-                                });
-                            }
+                            const tryPlay = () => {
+                                const p = el.play();
+                                if (p) {
+                                    p.catch(() => setAudioBlocked(true));
+                                }
+                            };
+                            tryPlay();
+                            window.setTimeout(() => {
+                                if (el.paused) tryPlay();
+                            }, 250);
 
                             console.log(
                                 "[LiveKit] Attached audio track from",
@@ -131,20 +143,25 @@ export const LiveKitConnectPanel = forwardRef<LiveKitPanelHandle, Props>(
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 lkRoom.on(RoomEvent.TranscriptionReceived, (segments: any[], participant: any) => {
                     for (const seg of segments) {
-                        if (!seg.final) continue;
                         const segId = String(seg.id ?? "");
-                        if (segId && seenSegments.current.has(segId)) continue;
-                        if (segId) seenSegments.current.add(segId);
 
                         const text = String(seg.text ?? "").trim();
                         if (!text) continue;
 
                         const identity = String(participant?.identity ?? "");
                         const isAgent = identity.includes("nova") || identity.includes("agent");
+                        const isFinal = Boolean(seg.final);
+
+                        // Keep user transcript stable (final-only), but allow live interim text for agent.
+                        if (!isAgent && !isFinal) continue;
+                        if (isFinal && segId && seenSegments.current.has(segId)) continue;
+                        if (isFinal && segId) seenSegments.current.add(segId);
 
                         onTranscriptRef.current?.({
                             role: isAgent ? "assistant" : "user",
                             content: text,
+                            isFinal,
+                            segmentId: segId || undefined,
                         });
                     }
                 });
@@ -154,10 +171,28 @@ export const LiveKitConnectPanel = forwardRef<LiveKitPanelHandle, Props>(
 
                 // Try to unlock browser audio
                 await lkRoom.startAudio().catch(() => setAudioBlocked(true));
+                window.setTimeout(() => {
+                    void lkRoom.startAudio().catch(() => {});
+                }, 300);
 
-                await lkRoom.localParticipant.setMicrophoneEnabled(true);
-                setMicEnabled(true);
-                onMicChangeRef.current?.(true);
+                const enableMicWithRetry = async () => {
+                    const delays = [0, 400, 900];
+                    for (const d of delays) {
+                        if (d) await new Promise((r) => window.setTimeout(r, d));
+                        try {
+                            await lkRoom.localParticipant.setMicrophoneEnabled(true);
+                            setMicEnabled(true);
+                            onMicChangeRef.current?.(true);
+                            return;
+                        } catch (micErr) {
+                            console.warn("[LiveKit] mic enable attempt failed:", micErr);
+                        }
+                    }
+                    setMicEnabled(false);
+                    onMicChangeRef.current?.(false);
+                    setError("Connected, but mic publish is delayed. Tap mic to retry.");
+                };
+                await enableMicWithRetry();
             } catch (e) {
                 console.error("LiveKit connect error:", e);
                 setStatus("error");
@@ -199,8 +234,8 @@ export const LiveKitConnectPanel = forwardRef<LiveKitPanelHandle, Props>(
 
         return (
             <div className="flex items-center gap-2 text-xs">
-                {/* Hidden container for agent audio elements */}
-                <div ref={audioContainerRef} style={{ display: "none" }} />
+                {/* Hidden-ish container for agent audio elements */}
+                <div ref={audioContainerRef} className="pointer-events-none absolute h-0 w-0 overflow-hidden" aria-hidden />
 
                 {audioBlocked && (
                     <button
