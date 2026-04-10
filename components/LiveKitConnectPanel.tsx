@@ -52,9 +52,16 @@ export const LiveKitConnectPanel = forwardRef<LiveKitPanelHandle, Props>(
                 setAgentPresent(false);
                 seenSegments.current.clear();
 
+                if (!userIdentity) {
+                    setStatus("error");
+                    setError("User session still loading. Please try voice again in a moment.");
+                    onConnectionChangeRef.current?.(false);
+                    return;
+                }
+
                 const q = new URLSearchParams({
                     room: roomName,
-                    identity: userIdentity || `web-${Date.now()}`,
+                    identity: userIdentity,
                     name: "Web User",
                 });
                 const tokenRes = await fetch(`/api/livekit/token?${q.toString()}`);

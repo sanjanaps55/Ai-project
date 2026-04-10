@@ -272,6 +272,10 @@ function ChatPageContent() {
     }
 
     function handleMicClick() {
+        if (!userId) {
+            console.warn("LiveKit connect skipped: user identity not loaded yet");
+            return;
+        }
         if (livekitConnected) {
             void livekitRef.current?.toggleMic();
             return;
@@ -340,8 +344,12 @@ function ChatPageContent() {
                             </button>
                             {!livekitConnected && (
                                 <button
-                                    onClick={() => livekitRef.current?.connect()}
-                                    className="px-5 py-2.5 rounded-full bg-gradient-to-tr from-primary-purple to-secondary text-bg-dark text-sm font-semibold shadow-[0_4px_20px_rgba(199,184,234,0.4)] hover:scale-105 transition-transform flex items-center gap-2"
+                                    onClick={() => {
+                                        if (!userId) return;
+                                        livekitRef.current?.connect();
+                                    }}
+                                    disabled={!userId}
+                                    className="px-5 py-2.5 rounded-full bg-gradient-to-tr from-primary-purple to-secondary text-bg-dark text-sm font-semibold shadow-[0_4px_20px_rgba(199,184,234,0.4)] hover:scale-105 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <Mic size={16} /> Start voice chat
                                 </button>
